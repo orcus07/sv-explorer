@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SV Memory Architecture Explorer</title>
+  <link rel="stylesheet" href="style.css">
+  <meta name="description" content="AI/GP 서버 플랫폼별 메모리 아키텍처 계층 탐색 도구">
+</head>
+<body>
+
+  <!-- ── Header ── -->
+  <header class="app-header">
+    <h1>SV Memory Architecture Explorer</h1>
+    <div class="header-controls">
+      <button id="btn-compare-mode" class="btn btn-ghost btn-sm" title="플랫폼 2개 선택 후 비교">
+        ⊞ 비교 모드
+      </button>
+      <button id="btn-highlight-clear" class="btn btn-ghost btn-sm" style="display:none;" title="메모리 하이라이트 해제">
+        ✕ 하이라이트 해제
+      </button>
+    </div>
+  </header>
+
+  <!-- ── Generation Nav ── -->
+  <div id="gen-nav-wrapper" class="generation-nav-wrapper">
+    <nav id="generation-nav" aria-label="세대 네비게이션"></nav>
+  </div>
+
+  <!-- ── Main 3-panel layout ── -->
+  <main class="app-main" id="app-main">
+
+    <!-- Left: Filter panel -->
+    <aside class="filter-panel" id="filter-panel" aria-label="필터 패널"></aside>
+
+    <!-- Center: Platform grid + Compare area -->
+    <section class="content-area" id="content-area">
+      <div class="grid-header">
+        <h2>플랫폼</h2>
+        <span id="compare-hint" style="font-size:0.75rem;color:var(--text-muted);display:none;">
+          비교할 두 번째 플랫폼을 선택하세요
+        </span>
+      </div>
+
+      <!-- Platform card grid -->
+      <div id="platform-grid"></div>
+
+      <!-- Compare split view (hidden by default) -->
+      <div id="compare-area" class="hidden" style="margin-top:16px;"></div>
+    </section>
+
+    <!-- Right: Hierarchy drill-down -->
+    <aside class="hierarchy-panel" id="hierarchy-panel" aria-label="계층 상세"></aside>
+
+  </main>
+
+  <!-- ── Mobile bottom tabs ── -->
+  <nav class="mobile-tabs" aria-label="모바일 탭">
+    <button class="tab-btn active" data-tab="grid">
+      <span class="tab-icon">⊞</span>
+      그리드
+    </button>
+    <button class="tab-btn" data-tab="filter">
+      <span class="tab-icon">⊟</span>
+      필터
+    </button>
+    <button class="tab-btn" data-tab="detail">
+      <span class="tab-icon">⊡</span>
+      상세
+    </button>
+  </nav>
+
+  <!-- ── Footer ── -->
+  <footer class="app-footer">
+    이 페이지의 제품 이미지는 각 기업의 공식 보도자료, 발표 자료, 제품 문서에서 수집되었습니다.
+    이미지 저작권은 각 기업에 귀속됩니다.
+    본 도구는 반도체 메모리 마케팅 내부 참조용입니다.
+  </footer>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

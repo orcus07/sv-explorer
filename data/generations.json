@@ -1,0 +1,395 @@
+{
+  "families": [
+    {
+      "id": "nvidia_gpu",
+      "vendor": "NVIDIA",
+      "name": "NVIDIA GPU",
+      "color": "#76B900",
+      "generations": [
+        {
+          "id": "volta",
+          "name": "Volta",
+          "year": 2017,
+          "platform_ids": ["v100_sxm2_8g","v100_pcie_8g","dgx_1v100","dgx_2","aws_p3_16xl","azure_ncv3_v100","nv_t4_8g","google_a1_t4"],
+          "tbd": false
+        },
+        {
+          "id": "ampere",
+          "name": "Ampere",
+          "year": 2020,
+          "platform_ids": ["a100_sxm4_8g","a100_pcie_8g","a800_sxm4_8g","a30_8g","a10_8g","dgx_a100","dell_xe8545_a100","hpe_cray_ex235a_a100","supermicro_sys420gp_a100","lenovo_sr670v2_a100","gigabyte_g292z_a100","quanta_d43k_a100","wiwynn_sv310_a100","fujitsu_rx2540m6_a100","aws_p4d_24xl","google_a2_ultragpu","google_a2_highgpu","azure_nd_a100_v4","azure_nc_a100_v4","azure_ndv2_a100","meta_zion","lambda_gpu_a100"],
+          "tbd": false
+        },
+        {
+          "id": "ada",
+          "name": "Ada Lovelace",
+          "year": 2022,
+          "platform_ids": ["l40s_8g","l4_8g","dell_r760xa_l40s","hpe_dl380_l40s","supermicro_sys220gq_l40s","lenovo_sr650v3_l40s","azure_nv_a10_v5","dell_poweredge_r760_l40s"],
+          "tbd": false
+        },
+        {
+          "id": "hopper",
+          "name": "Hopper",
+          "year": 2022,
+          "platform_ids": ["h100_sxm5_8g","h100_pcie_8g","h100_nvl","h800_sxm5_8g","dgx_h100","dell_xe9680_h100","hpe_cray_xd670_h100","supermicro_sys421ge_h100","lenovo_sr780av3_h100","gigabyte_g593z53_h100","quanta_d54q_h100","wiwynn_sv310p_h100","inventec_d4_h100","aws_p5_48xl","google_a3_mega","google_a3_plus","azure_nd_h100_v5","meta_grand_teton","coreweave_hgx_h100","lambda_gpu_h100","crusoe_hgx_h100","fujitsu_rx2540m7_h100","nec_express5800_h100","atos_bullsequana_h100","inspur_nf5598m7_h100","meta_rsiv_h100"],
+          "tbd": false
+        },
+        {
+          "id": "hopper_plus",
+          "name": "Hopper+",
+          "year": 2023,
+          "platform_ids": ["h200_sxm5_8g","gh200_nvl32","gh200_nvl2","h200_nvl8","dgx_h200","dell_xe9680_h200","hpe_cray_xd670_h200","supermicro_sys421ge_h200","lenovo_sr780av3_h200","gigabyte_g593z53_h200","quanta_d54q_h200","coreweave_hgx_h200","azure_nd_h200_v5","google_a3_ultra"],
+          "tbd": false
+        },
+        {
+          "id": "blackwell",
+          "name": "Blackwell",
+          "year": 2025,
+          "platform_ids": ["gb200_nvl72","gb200_nvl36","gb200_nvl36x2","gb300_nvl72","b200_hgx_8g","b200_pcie_8g","b100_hgx_8g","b100_pcie_8g","dgx_b200","dell_xe9780_b200","hpe_cray_xd685_b200","supermicro_sys821ge_b200","lenovo_sr870av4_b200","quanta_d54q_b200","wiwynn_sv_cv3_gb200","foxconn_r2_gb200","inventec_d5_b200","coreweave_gb200_nvl"],
+          "tbd": false
+        },
+        {
+          "id": "vera_rubin",
+          "name": "Vera Rubin",
+          "year": 2026,
+          "platform_ids": ["nvidia_vera_rubin_nvl"],
+          "tbd": true
+        }
+      ]
+    },
+    {
+      "id": "aws_trainium",
+      "vendor": "AWS",
+      "name": "AWS Trainium",
+      "color": "#FF9900",
+      "generations": [
+        {
+          "id": "trainium1",
+          "name": "Trainium1",
+          "year": 2021,
+          "platform_ids": ["trainium1_trn1_32xl","trainium1_trn1n_32xl"],
+          "tbd": false
+        },
+        {
+          "id": "trainium2",
+          "name": "Trainium2",
+          "year": 2023,
+          "platform_ids": ["trainium2_ultraserver","trainium2_trn2_48xl","trainium2_trn2e_32xl"],
+          "tbd": false
+        },
+        {
+          "id": "trainium3",
+          "name": "Trainium3",
+          "year": 2026,
+          "platform_ids": [],
+          "tbd": true
+        }
+      ]
+    },
+    {
+      "id": "aws_inferentia",
+      "vendor": "AWS",
+      "name": "AWS Inferentia",
+      "color": "#FF6B35",
+      "generations": [
+        {
+          "id": "inferentia1",
+          "name": "Inferentia1",
+          "year": 2019,
+          "platform_ids": ["inferentia1_inf1_24xl"],
+          "tbd": false
+        },
+        {
+          "id": "inferentia2",
+          "name": "Inferentia2",
+          "year": 2022,
+          "platform_ids": ["inferentia2_inf2_48xl","inferentia2_inf2_24xl"],
+          "tbd": false
+        },
+        {
+          "id": "inferentia3",
+          "name": "Inferentia3",
+          "year": 2026,
+          "platform_ids": [],
+          "tbd": true
+        }
+      ]
+    },
+    {
+      "id": "google_tpu",
+      "vendor": "Google",
+      "name": "Google TPU",
+      "color": "#4285F4",
+      "generations": [
+        {
+          "id": "tpu_v3",
+          "name": "TPU v3",
+          "year": 2018,
+          "platform_ids": ["tpu_v2","tpu_v3"],
+          "tbd": false
+        },
+        {
+          "id": "tpu_v4",
+          "name": "TPU v4",
+          "year": 2021,
+          "platform_ids": ["tpu_v4"],
+          "tbd": false
+        },
+        {
+          "id": "tpu_v5e",
+          "name": "TPU v5e",
+          "year": 2023,
+          "platform_ids": ["tpu_v5e"],
+          "tbd": false
+        },
+        {
+          "id": "tpu_v5p",
+          "name": "TPU v5p",
+          "year": 2023,
+          "platform_ids": ["tpu_v5p"],
+          "tbd": false
+        },
+        {
+          "id": "tpu_v6e",
+          "name": "TPU v6e (Trillium)",
+          "year": 2024,
+          "platform_ids": ["tpu_v6e"],
+          "tbd": false
+        },
+        {
+          "id": "tpu_v7",
+          "name": "TPU v7",
+          "year": 2026,
+          "platform_ids": ["tpu_v7"],
+          "tbd": true
+        }
+      ]
+    },
+    {
+      "id": "azure_maia",
+      "vendor": "Azure",
+      "name": "Azure MAIA",
+      "color": "#0078D4",
+      "generations": [
+        {
+          "id": "maia1",
+          "name": "MAIA 1",
+          "year": 2023,
+          "platform_ids": ["maia100_nd_series"],
+          "tbd": false
+        },
+        {
+          "id": "maia2",
+          "name": "MAIA 2",
+          "year": 2024,
+          "platform_ids": ["maia2_nd_series"],
+          "tbd": false
+        }
+      ]
+    },
+    {
+      "id": "azure_cobalt",
+      "vendor": "Azure",
+      "name": "Azure Cobalt",
+      "color": "#50E6FF",
+      "generations": [
+        {
+          "id": "cobalt100",
+          "name": "Cobalt 100",
+          "year": 2024,
+          "platform_ids": ["cobalt100_dv6","azure_cobalt100_hbv5"],
+          "tbd": false
+        }
+      ]
+    },
+    {
+      "id": "meta_mtia",
+      "vendor": "Meta",
+      "name": "Meta MTIA",
+      "color": "#1877F2",
+      "generations": [
+        {
+          "id": "mtia_v1",
+          "name": "MTIA v1",
+          "year": 2023,
+          "platform_ids": ["meta_mtia_v1"],
+          "tbd": false
+        },
+        {
+          "id": "mtia_v2",
+          "name": "MTIA v2",
+          "year": 2024,
+          "platform_ids": ["meta_mtia_v2"],
+          "tbd": false
+        }
+      ]
+    },
+    {
+      "id": "intel_xeon",
+      "vendor": "Intel",
+      "name": "Intel Xeon GP",
+      "color": "#0071C5",
+      "generations": [
+        {
+          "id": "spr",
+          "name": "SPR (Sapphire Rapids)",
+          "year": 2023,
+          "platform_ids": ["spr_2s_gp","spr_4s_gp","inspur_nf8480m7_spr4s","google_hpc_h3"],
+          "tbd": false
+        },
+        {
+          "id": "emr",
+          "name": "EMR (Emerald Rapids)",
+          "year": 2023,
+          "platform_ids": ["emr_2s_gp","emr_4s_gp","dell_r760_emr_gp","lenovo_sr650v4_emr","supermicro_sys121h_emr","hpe_dl360_gen11_emr"],
+          "tbd": false
+        },
+        {
+          "id": "gnr",
+          "name": "GNR (Granite Rapids)",
+          "year": 2024,
+          "platform_ids": ["gnr_2s_gp","gnr_4s_gp","hpe_dl380_gen11_gnr","supermicro_sys621h_gnr","dell_r760_gnr_gp","lenovo_sr650v4_gnr","fujitsu_primergy_gnr"],
+          "tbd": false
+        },
+        {
+          "id": "srf",
+          "name": "SRF (Sierra Forest)",
+          "year": 2024,
+          "platform_ids": ["srf_2s_gp"],
+          "tbd": false
+        }
+      ]
+    },
+    {
+      "id": "intel_gaudi",
+      "vendor": "Intel",
+      "name": "Intel Gaudi AI",
+      "color": "#0860D1",
+      "generations": [
+        {
+          "id": "gaudi2",
+          "name": "Gaudi 2",
+          "year": 2022,
+          "platform_ids": ["gaudi2_8g","gaudi2_ubb_4g"],
+          "tbd": false
+        },
+        {
+          "id": "gaudi3",
+          "name": "Gaudi 3",
+          "year": 2024,
+          "platform_ids": ["gaudi3_8g","gaudi3_ubb_4g","gaudi3_oam_8g","dell_xe9680_gaudi3","hpe_dl380_gaudi3","supermicro_sys421ge_gaudi3","gigabyte_r182_gaudi3"],
+          "tbd": false
+        }
+      ]
+    },
+    {
+      "id": "amd_epyc",
+      "vendor": "AMD",
+      "name": "AMD EPYC GP",
+      "color": "#ED1C24",
+      "generations": [
+        {
+          "id": "milan",
+          "name": "Milan (Zen 3)",
+          "year": 2021,
+          "platform_ids": ["milan_2s_gp","azure_hbv3_amd"],
+          "tbd": false
+        },
+        {
+          "id": "genoa",
+          "name": "Genoa (Zen 4)",
+          "year": 2022,
+          "platform_ids": ["genoa_2s_gp","genoa_4s_gp","genoa_x_2s_gp","bergamo_2s_gp","siena_1s_gp","dell_r7725_genoa","hpe_dl385_gen11_genoa","lenovo_sr665v3_genoa","supermicro_as2125hs_genoa","aws_hpc7a_96xl","azure_hbv4_amd"],
+          "tbd": false
+        },
+        {
+          "id": "turin",
+          "name": "Turin (Zen 5)",
+          "year": 2024,
+          "platform_ids": ["turin_2s_gp","turin_4s_gp","dell_r7715_turin","hpe_dl385_gen11_turin","lenovo_sr685av3_turin","nec_express_turin"],
+          "tbd": false
+        }
+      ]
+    },
+    {
+      "id": "amd_instinct",
+      "vendor": "AMD",
+      "name": "AMD Instinct AI",
+      "color": "#C8002A",
+      "generations": [
+        {
+          "id": "mi200",
+          "name": "MI200 (CDNA2)",
+          "year": 2021,
+          "platform_ids": ["mi250x_8g","mi210_8g"],
+          "tbd": false
+        },
+        {
+          "id": "mi300",
+          "name": "MI300 (CDNA3)",
+          "year": 2023,
+          "platform_ids": ["mi300x_8g","mi300a_4g","dell_xe9680_mi300x","hpe_cray_xd665_mi300x","hpe_cray_xd655_mi300a","supermicro_as8125gs_mi300x","supermicro_as4125gs_mi300a","gigabyte_g593_mi300x","wiwynn_sv310_mi300x","quanta_d53g_mi300x","azure_nd_mi300x_v1"],
+          "tbd": false
+        },
+        {
+          "id": "mi350",
+          "name": "MI350 (CDNA4)",
+          "year": 2025,
+          "platform_ids": ["mi350x_8g"],
+          "tbd": true
+        }
+      ]
+    },
+    {
+      "id": "arm_server",
+      "vendor": "Arm",
+      "name": "Arm CPU Server",
+      "color": "#0091BD",
+      "generations": [
+        {
+          "id": "arm_gen1",
+          "name": "Altra / Graviton3",
+          "year": 2021,
+          "platform_ids": ["ampere_altra_2s","ampere_altra_max_2s","aws_graviton3_hpc7g"],
+          "tbd": false
+        },
+        {
+          "id": "arm_gen2",
+          "name": "AmpereOne / Graviton4",
+          "year": 2023,
+          "platform_ids": ["ampere_ampereone_2s","aws_graviton4_hpc8g"],
+          "tbd": false
+        },
+        {
+          "id": "arm_gen3",
+          "name": "Axion / Neoverse V2",
+          "year": 2024,
+          "platform_ids": ["google_c4a_axion"],
+          "tbd": false
+        }
+      ]
+    },
+    {
+      "id": "other_ai",
+      "vendor": "Other",
+      "name": "Other AI Accelerators",
+      "color": "#7C3AED",
+      "generations": [
+        {
+          "id": "ai_2022",
+          "name": "2020–2022 Generation",
+          "year": 2022,
+          "platform_ids": ["graphcore_bow_pod256","d_matrix_corsair"],
+          "tbd": false
+        },
+        {
+          "id": "ai_2023",
+          "name": "2023–2024 Generation",
+          "year": 2023,
+          "platform_ids": ["groq_rack_lpu","cerebras_cs3","sambanova_sn40l","qualcomm_ca100_ultra","tenstorrent_n300_wh","tenstorrent_p100_bh"],
+          "tbd": false
+        }
+      ]
+    }
+  ]
+}
