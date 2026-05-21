@@ -2386,6 +2386,27 @@
         "caption": "NVIDIA DGX H100 GPU tray – 8x H100 SXM5 GPUs (NVIDIA DGX H100 User Guide)",
         "source_type": "oem_manual",
         "source_url": "https://docs.nvidia.com/dgx/dgxh100-user-guide/"
+      },
+      {
+        "level": "tray",
+        "file": "assets/official/nvidia/h100_dgx_server_front.png",
+        "caption": "NVIDIA DGX H100 server front view without bezel (NVIDIA DGX H100 User Guide)",
+        "source_type": "oem_manual",
+        "source_url": "https://docs.nvidia.com/dgx/dgxh100-user-guide/"
+      },
+      {
+        "level": "tray",
+        "file": "assets/official/nvidia/h100_dgx_rear_panel.png",
+        "caption": "NVIDIA DGX H100 rear panel – I/O modules and connectors (NVIDIA DGX H100 User Guide)",
+        "source_type": "oem_manual",
+        "source_url": "https://docs.nvidia.com/dgx/dgxh100-user-guide/"
+      },
+      {
+        "level": "cluster",
+        "file": "assets/official/nvidia/h100_superpod_mgmt_rack.png",
+        "caption": "DGX H100 SuperPOD management rack configuration (NVIDIA RA doc)",
+        "source_type": "official_doc",
+        "source_url": "https://docs.nvidia.com/dgx-superpod/reference-architecture-scalable-infrastructure-h100/latest/"
       }
     ]
   },
@@ -6977,6 +6998,13 @@
         "level": "tray",
         "file": "assets/official/google/tpu_v5e_chips_no_heatsink.jpg",
         "caption": "Google TPU v5e – chips without heatsinks (SC23, ServeTheHome Nov 2023)",
+        "source_type": "keynote_slide",
+        "source_url": "https://www.servethehome.com"
+      },
+      {
+        "level": "tray",
+        "file": "assets/official/google/tpu_v5e_board_interconnects.jpg",
+        "caption": "Google TPU v5e board – interconnect ports and heatsinks (SC23, ServeTheHome Nov 2023)",
         "source_type": "keynote_slide",
         "source_url": "https://www.servethehome.com"
       }
