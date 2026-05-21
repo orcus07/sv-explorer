@@ -680,60 +680,70 @@ button { cursor: pointer; border: none; background: none; font: inherit; color: 
   border-radius: var(--radius-sm);
   overflow: hidden;
   border: 1px solid var(--border);
-  background: var(--bg-app);
-  min-height: 140px;
+  background: #0a0a0e;
   display: flex;
   flex-direction: column;
 }
 .official-image-wrap img {
   width: 100%;
-  height: auto;
+  min-height: 300px;
+  max-height: 520px;
   object-fit: contain;
-  border-radius: 0;
+  object-position: center;
+  background: #0a0a0e;
+  display: block;
 }
 .image-attribution {
-  padding: 6px 10px;
+  padding: 8px 12px;
   background: var(--bg-surface);
   border-top: 1px solid var(--border);
-  font-size: 0.66rem;
-  color: var(--text-muted);
+  font-size: 0.7rem;
+  color: var(--text-secondary);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.image-attribution span {
+  font-weight: 500;
+  letter-spacing: 0.01em;
 }
 .image-attribution a {
   color: var(--text-link);
-  font-size: 0.64rem;
+  font-size: 0.68rem;
   white-space: nowrap;
+  text-decoration: none;
+  opacity: 0.85;
 }
+.image-attribution a:hover { opacity: 1; text-decoration: underline; }
 
 /* Placeholder */
 .image-placeholder {
-  flex: 1;
-  min-height: 120px;
+  min-height: 300px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 20px;
+  gap: 8px;
+  padding: 24px;
   color: var(--text-muted);
   text-align: center;
 }
 .placeholder-bracket {
   font-family: monospace;
-  font-size: 0.82rem;
+  font-size: 0.85rem;
   color: var(--text-muted);
   letter-spacing: 0.04em;
-  padding: 4px 10px;
+  padding: 6px 14px;
   border: 1px dashed var(--border-focus);
   border-radius: var(--radius-sm);
 }
 .placeholder-note {
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   color: var(--text-muted);
-  line-height: 1.4;
+  line-height: 1.5;
+  max-width: 280px;
 }
 
 /* Spec table */

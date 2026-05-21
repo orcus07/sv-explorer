@@ -22,8 +22,11 @@
         "description": "576-GPU NVLink Switch fabric spanning multiple NVL72 racks",
         "fabric": "NVLink 5th Gen",
         "official_image": {
-          "file": null,
-          "status": "not_found"
+          "file": "assets/official/nvidia/hardware-nvlink-switch-tray.png",
+          "status": "found",
+          "source_type": "oem_manual",
+          "source_url": "https://docs.nvidia.com/dgx/dgxgb200-user-guide/hardware.html",
+          "caption": "DGX GB200 NVLink Switch Tray (Cluster Fabric Element)"
         }
       },
       "rack": {
@@ -35,8 +38,11 @@
         "total_cpus": 36,
         "power_kw": 120,
         "official_image": {
-          "file": null,
-          "status": "not_found"
+          "file": "assets/official/nvidia/hardware-rack-configuration.png",
+          "status": "found",
+          "source_type": "oem_manual",
+          "source_url": "https://docs.nvidia.com/dgx/dgxgb200-user-guide/hardware.html",
+          "caption": "DGX GB200 NVL72 Rack Configuration"
         }
       },
       "tray": {
@@ -45,8 +51,11 @@
         "superchips_per_tray": 4,
         "description": "4x GB200 Superchip (2 Grace CPUs + 4 B200 GPUs)",
         "official_image": {
-          "file": null,
-          "status": "not_found"
+          "file": "assets/official/nvidia/hardware-compute-tray.png",
+          "status": "found",
+          "source_type": "oem_manual",
+          "source_url": "https://docs.nvidia.com/dgx/dgxgb200-user-guide/hardware.html",
+          "caption": "DGX GB200 Compute Tray"
         }
       },
       "server": {
@@ -72,8 +81,11 @@
           "interconnect": "NVLink 5th Gen 1800 GB/s"
         },
         "official_image": {
-          "file": null,
-          "status": "not_found"
+          "file": "assets/official/nvidia/hardware-compute-tray-block-diagram.png",
+          "status": "found",
+          "source_type": "oem_manual",
+          "source_url": "https://docs.nvidia.com/dgx/dgxgb200-user-guide/hardware.html",
+          "caption": "GB200 Superchip Block Diagram"
         }
       }
     },
@@ -7729,7 +7741,7 @@
   },
   {
     "platform_id": "tpu_v7",
-    "display_name": "TPU v7 (TBD)",
+    "display_name": "TPU Ironwood (v7)",
     "vendor": "Google",
     "customer": "Google Cloud",
     "category": "AI_SV",
@@ -7746,31 +7758,40 @@
     },
     "hierarchy": {
       "cluster": {
-        "label": "TPU v7 Pod",
-        "description": "TPU v7 Pod (사양 미공개 — TBD)",
-        "fabric": "ICI (TBD)",
+        "label": "Ironwood Pod / Superpod",
+        "description": "9,216-chip Ironwood Superpod (144 cubes) connected via OCS",
+        "fabric": "ICI 9.6 Tb/s + Optical Circuit Switching (OCS)",
         "official_image": {
-          "file": null,
-          "status": "not_found"
+          "file": "assets/official/google/ironwood-ocs-topology.jpg",
+          "status": "found",
+          "source_type": "official_blog",
+          "source_url": "https://cloud.google.com/blog/products/compute/inside-the-ironwood-tpu-codesigned-ai-stack",
+          "caption": "Ironwood OCS Cube Topology"
         }
       },
       "rack": {
-        "label": "TPU v7 Rack",
+        "label": "Ironwood Cube (64 chips)",
         "official_image": {
-          "file": null,
-          "status": "not_found"
+          "file": "assets/official/google/ironwood-3d-torus.png",
+          "status": "found",
+          "source_type": "official_blog",
+          "source_url": "https://cloud.google.com/blog/products/compute/inside-the-ironwood-tpu-codesigned-ai-stack",
+          "caption": "Ironwood 3D Torus Intra-Cube Network"
         },
         "servers_per_rack": 8,
         "total_accelerators": 64
       },
       "tray": null,
       "server": {
-        "form_factor": "TPU v7 Host Node (TBD)",
+        "form_factor": "Ironwood Host Node (8 chips)",
         "cpu": null,
         "accelerator": null,
         "official_image": {
-          "file": null,
-          "status": "not_found"
+          "file": "assets/official/google/ironwood-chip-layout.png",
+          "status": "found",
+          "source_type": "official_blog",
+          "source_url": "https://cloud.google.com/blog/products/compute/inside-the-ironwood-tpu-codesigned-ai-stack",
+          "caption": "Ironwood Chip Layout (2 chiplets per die)"
         }
       }
     },
@@ -7778,7 +7799,7 @@
       "host_mem_type": "DDR5_RDIMM",
       "accel_mem_type": "HBM3e",
       "host_mem_note": "TBD",
-      "accel_mem_note": "TBD"
+      "accel_mem_note": "HBM3e 192 GB per chiplet (96 GB x 2)"
     }
   },
   {
