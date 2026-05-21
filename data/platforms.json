@@ -22,8 +22,11 @@
         "description": "576-GPU NVLink Switch fabric spanning multiple NVL72 racks",
         "fabric": "NVLink 5th Gen",
         "official_image": {
-          "file": null,
-          "status": "not_found"
+          "file": "assets/official/nvidia/image3.png",
+          "status": "found",
+          "source_type": "official_doc",
+          "source_url": "https://docs.nvidia.com/dgx-superpod/reference-architecture-scalable-infrastructure-gb200/latest/",
+          "caption": "DGX GB200 SuperPOD — Scalable Unit (4 Racks = 288 Superchips = 576 B200 GPUs)"
         }
       },
       "rack": {
@@ -39,7 +42,7 @@
           "status": "found",
           "source_type": "oem_manual",
           "source_url": "https://docs.nvidia.com/dgx/dgxgb200-user-guide/hardware.html",
-          "caption": "DGX GB200 NVL72 Rack Configuration"
+          "caption": "DGX GB200 NVL72 Rack — 18 Compute Trays + 9 NVLink Switch Trays = 72 B200 GPUs"
         }
       },
       "tray": {
@@ -52,8 +55,31 @@
           "status": "found",
           "source_type": "oem_manual",
           "source_url": "https://docs.nvidia.com/dgx/dgxgb200-user-guide/hardware.html",
-          "caption": "DGX GB200 Compute Tray"
-        }
+          "caption": "DGX GB200 Compute Tray — 2x GB200 Superchip = 4x B200 + 2x Grace"
+        },
+        "extra_images": [
+          {
+            "file": "assets/official/nvidia/image4.png",
+            "status": "found",
+            "source_type": "official_doc",
+            "source_url": "https://docs.nvidia.com/dgx-superpod/reference-architecture-scalable-infrastructure-gb200/latest/",
+            "caption": "Compute Tray Front View"
+          },
+          {
+            "file": "assets/official/nvidia/image5.png",
+            "status": "found",
+            "source_type": "official_doc",
+            "source_url": "https://docs.nvidia.com/dgx-superpod/reference-architecture-scalable-infrastructure-gb200/latest/",
+            "caption": "Compute Tray Rear View"
+          },
+          {
+            "file": "assets/official/nvidia/hardware-compute-tray-block-diagram.png",
+            "status": "found",
+            "source_type": "oem_manual",
+            "source_url": "https://docs.nvidia.com/dgx/dgxgb200-user-guide/hardware.html",
+            "caption": "Compute Tray Block Diagram — 2x GB200 Superchip = 4x B200 + 2x Grace"
+          }
+        ]
       },
       "server": {
         "form_factor": "GB200 Superchip (Grace + B200x2)",
@@ -78,11 +104,9 @@
           "interconnect": "NVLink 5th Gen 1800 GB/s"
         },
         "official_image": {
-          "file": "assets/official/nvidia/hardware-compute-tray-top.png",
-          "status": "found",
-          "source_type": "oem_manual",
-          "source_url": "https://docs.nvidia.com/dgx/dgxgb200-user-guide/hardware.html",
-          "caption": "GB200 Superchip — Compute Tray Top View"
+          "file": null,
+          "status": "not_found",
+          "note": "GB200 Superchip (Grace+Blackwell) 공식 실물 사진 없음"
         }
       }
     },
@@ -7763,17 +7787,17 @@
           "status": "found",
           "source_type": "official_blog",
           "source_url": "https://cloud.google.com/blog/products/compute/ironwood-tpus-and-new-axion-based-vms-for-your-ai-workloads",
-          "caption": "Ironwood Superpod — 9,216 TPU Chips"
+          "caption": "Ironwood SuperPod — 9,216 chips (144 cubes)"
         }
       },
       "rack": {
         "label": "Ironwood Cube (64 chips)",
         "official_image": {
-          "file": "assets/official/google/ironwood-cdu.jpg",
+          "file": "assets/official/google/ironwood-rack-sth.jpg",
           "status": "found",
-          "source_type": "official_blog",
-          "source_url": "https://cloud.google.com/blog/products/compute/ironwood-tpus-and-new-axion-based-vms-for-your-ai-workloads",
-          "caption": "Ironwood Superpod — 3세대 CDU 액체 냉각 시스템"
+          "source_type": "keynote_slide",
+          "source_url": "https://www.servethehome.com",
+          "caption": "Ironwood Rack — 64 TPU chips per cube (16 host nodes x 4 chips)"
         },
         "servers_per_rack": 8,
         "total_accelerators": 64
@@ -7789,7 +7813,16 @@
           "source_type": "official_blog",
           "source_url": "https://cloud.google.com/blog/products/compute/ironwood-tpus-and-new-axion-based-vms-for-your-ai-workloads",
           "caption": "Ironwood Board — TPU 3개 + 액체 냉각"
-        }
+        },
+        "extra_images": [
+          {
+            "file": "assets/official/google/ironwood-sc25-chip.jpg",
+            "status": "found",
+            "source_type": "keynote_slide",
+            "source_url": "https://www.servethehome.com",
+            "caption": "Ironwood TPU v7 chip package — 8x HBM3e, 192 GiB"
+          }
+        ]
       }
     },
     "memory_summary": {

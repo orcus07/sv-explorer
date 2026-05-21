@@ -143,7 +143,7 @@ export class HierarchyView {
           <span class="level-name">${c.label}</span>
         </div>
         <div class="level-card-body">
-          ${officialImageHTML(c.official_image)}
+          ${allImagesHTML(c)}
           <table class="spec-table">
             <tr><td>인터커넥트</td><td>${c.fabric || '—'}</td></tr>
             <tr><td>설명</td><td>${c.description || '—'}</td></tr>
@@ -160,7 +160,7 @@ export class HierarchyView {
           <span class="level-name">${r.label}</span>
         </div>
         <div class="level-card-body">
-          ${officialImageHTML(r.official_image)}
+          ${allImagesHTML(r)}
           <table class="spec-table">
             ${r.trays_per_rack != null ? `<tr><td>Tray 수</td><td>${r.trays_per_rack}</td></tr>` : ''}
             ${r.total_gpus != null ? `<tr><td>총 GPU 수</td><td>${r.total_gpus}</td></tr>` : ''}
@@ -182,7 +182,7 @@ export class HierarchyView {
           <span class="level-name">${t.label}</span>
         </div>
         <div class="level-card-body">
-          ${officialImageHTML(t.official_image)}
+          ${allImagesHTML(t)}
           <table class="spec-table">
             ${t.count_per_rack != null ? `<tr><td>Rack당 Tray 수</td><td>${t.count_per_rack}</td></tr>` : ''}
             ${t.superchips_per_tray != null ? `<tr><td>Superchip 수</td><td>${t.superchips_per_tray}</td></tr>` : ''}
@@ -208,7 +208,7 @@ export class HierarchyView {
           <span class="level-name">${s.form_factor || '—'}</span>
         </div>
         <div class="level-card-body">
-          ${officialImageHTML(s.official_image)}
+          ${allImagesHTML(s)}
           <table class="spec-table">
             ${cpu ? `
               <tr><td>CPU 모델</td><td>${cpu.model}</td></tr>
@@ -237,20 +237,33 @@ export class HierarchyView {
   }
 }
 
-function officialImageHTML(img) {
-  if (!img) {
-    return placeholderHTML('이미지 정보 없음');
-  }
-  if (img.status === 'not_found' || !img.file) {
-    return placeholderHTML(img.note || '공식 발표 자료에서 확인된 이미지가 없습니다.');
-  }
+// Renders all images for a level node (primary official_image + extra_images array)
+function allImagesHTML(node) {
+  if (!node) return placeholderHTML('이미지 정보 없음');
 
+  const primary = node.official_image;
+  const extras  = (node.extra_images || []).filter(e => e && e.status === 'found' && e.file);
+
+  // Collect renderable images
+  const images = [];
+  if (primary && primary.status === 'found' && primary.file) images.push(primary);
+  images.push(...extras);
+
+  if (images.length === 0) {
+    const note = primary?.note || '공식 발표 자료에서 확인된 이미지가 없습니다.';
+    return placeholderHTML(note);
+  }
+  return images.map(img => singleImageHTML(img)).join('');
+}
+
+function singleImageHTML(img) {
   const sourceLabel = attributionLabel(img);
+  const captionPart = img.caption ? `<strong>${img.caption}</strong> — ` : '';
   return `
     <div class="official-image-wrap">
-      <img src="${img.file}" alt="공식 이미지" loading="lazy">
+      <img src="${img.file}" alt="${img.caption || '공식 이미지'}" loading="lazy">
       <div class="image-attribution">
-        <span>출처: ${sourceLabel}</span>
+        <span>${captionPart}출처: ${sourceLabel}</span>
         ${img.source_url ? `<a href="${img.source_url}" target="_blank" rel="noopener">원본 링크 ↗</a>` : ''}
       </div>
     </div>`;
