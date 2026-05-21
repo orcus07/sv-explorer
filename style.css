@@ -318,6 +318,36 @@ button { cursor: pointer; border: none; background: none; font: inherit; color: 
   background: var(--border);
 }
 
+/* Image toggle (radio-style 2-button) */
+.filter-toggle-row {
+  display: flex;
+  gap: 6px;
+}
+.filter-toggle-btn {
+  flex: 1;
+  padding: 5px 10px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition), border-color var(--transition);
+  white-space: nowrap;
+}
+.filter-toggle-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--border-focus);
+  background: var(--bg-card);
+}
+.filter-toggle-btn.active {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent-hover);
+  font-weight: 600;
+}
+
 .filter-count {
   font-size: 0.72rem;
   color: var(--text-muted);

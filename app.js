@@ -62,13 +62,22 @@ async function init() {
 
 // ─── Filter logic ─────────────────────────────────────────────────────────────
 function applyFilters() {
-  // memTypes는 필터가 아닌 하이라이트 전용 — 벤더/카테고리만 필터링
-  const { vendors, types } = state.filters;
+  // memTypes는 필터가 아닌 하이라이트 전용 — 벤더/카테고리/이미지 필터링
+  const { vendors, types, hasImage } = state.filters;
   state.filtered = state.platforms.filter(p => {
     const vendorKey = normalizeVendor(p.vendor);
-    if (vendors && !vendors.includes(vendorKey)) return false;
-    if (types   && !types.includes(p.category))   return false;
+    if (vendors  && !vendors.includes(vendorKey)) return false;
+    if (types    && !types.includes(p.category))  return false;
+    if (hasImage && !platformHasOfficialImage(p))  return false;
     return true;
+  });
+}
+
+function platformHasOfficialImage(p) {
+  const h = p.hierarchy;
+  return ['cluster', 'rack', 'tray', 'server'].some(lvl => {
+    const node = h[lvl];
+    return node && node.official_image && node.official_image.status === 'found';
   });
 }
 

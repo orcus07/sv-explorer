@@ -12,6 +12,7 @@ export class FilterPanel {
       vendors:  new Set(),
       types:    new Set(),
       memTypes: new Set(),
+      hasImage: false,   // false = 전체, true = 이미지 있음만
     };
     this.render();
     this._bind();
@@ -37,6 +38,16 @@ export class FilterPanel {
         <div class="filter-chips" id="fp-types">
           <button class="chip" data-group="types" data-val="AI_SV">AI SV</button>
           <button class="chip" data-group="types" data-val="GP_SV">GP SV</button>
+        </div>
+      </div>
+
+      <div class="filter-divider"></div>
+
+      <div class="filter-section">
+        <div class="filter-section-title">공식 이미지</div>
+        <div class="filter-toggle-row" id="fp-hasimage">
+          <button class="filter-toggle-btn active" data-val="all">전체</button>
+          <button class="filter-toggle-btn" data-val="image">📷 이미지 있음</button>
         </div>
       </div>
 
@@ -76,9 +87,23 @@ export class FilterPanel {
       });
     });
 
+    // Image toggle (radio: only one active at a time)
+    this.el.querySelectorAll('#fp-hasimage .filter-toggle-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this.filters.hasImage = btn.dataset.val === 'image';
+        this.el.querySelectorAll('#fp-hasimage .filter-toggle-btn').forEach(b => {
+          b.classList.toggle('active', b.dataset.val === (this.filters.hasImage ? 'image' : 'all'));
+        });
+        this.onChange(this.getFilters());
+      });
+    });
+
     this.el.querySelector('#fp-reset').addEventListener('click', () => {
       ['vendors', 'types', 'memTypes'].forEach(g => this.filters[g].clear());
+      this.filters.hasImage = false;
       this.el.querySelectorAll('.chip').forEach(b => b.classList.remove('active'));
+      this.el.querySelector('#fp-hasimage .filter-toggle-btn[data-val="all"]').classList.add('active');
+      this.el.querySelector('#fp-hasimage .filter-toggle-btn[data-val="image"]').classList.remove('active');
       this.onChange(this.getFilters());
     });
   }
@@ -88,6 +113,7 @@ export class FilterPanel {
       vendors:  this.filters.vendors.size  ? [...this.filters.vendors]  : null,
       types:    this.filters.types.size    ? [...this.filters.types]    : null,
       memTypes: this.filters.memTypes.size ? [...this.filters.memTypes] : null,
+      hasImage: this.filters.hasImage || null,   // null = no filter, true = image only
     };
   }
 
