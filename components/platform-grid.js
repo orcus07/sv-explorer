@@ -118,6 +118,14 @@ export class PlatformGrid {
       </div>`;
   }
 
+  _hasOfficialImage(p) {
+    const h = p.hierarchy;
+    return ['cluster', 'rack', 'tray', 'server'].some(lvl => {
+      const node = h[lvl];
+      return node && node.official_image && node.official_image.status === 'found';
+    });
+  }
+
   _cardHTML(p, { selectedId, compareId, highlightActive, matchesHighlight, compareMode, highlightMemType }) {
     const isSelected = p.platform_id === selectedId;
     const isCompare  = p.platform_id === compareId;
@@ -150,6 +158,7 @@ export class PlatformGrid {
           </div>
           <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
             <span class="card-category-badge${p.category === 'AI_SV' ? ' ai' : ''}">${p.category.replace('_', ' ')}</span>
+            ${this._hasOfficialImage(p) ? '<span class="card-img-badge" title="공식 이미지 있음">📷</span>' : ''}
             ${isCompare ? '<span class="card-compare-label">B</span>' : ''}
             ${isSelected && compareMode ? '<span class="card-compare-label" style="color:var(--accent-hover)">A</span>' : ''}
           </div>

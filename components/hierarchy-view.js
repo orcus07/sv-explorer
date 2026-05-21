@@ -1,14 +1,15 @@
 import { memBadgeHTML } from './memory-badge.js';
 
-const LEVELS_AI = ['cluster', 'rack', 'tray', 'server', 'component'];
-const LEVELS_GP = ['cluster', 'rack', 'server', 'component'];
+// NVIDIA superchip platforms (vendor=NVIDIA + hierarchy.tray exists) → 4 tabs
+// All others → 3 tabs (Superchip hidden, Tray shows server-level content)
+const LEVELS_SUPERCHIP = ['cluster', 'rack', 'tray', 'superchip'];
+const LEVELS_STANDARD  = ['cluster', 'rack', 'tray'];
 
 const LEVEL_LABELS = {
   cluster:   'Cluster',
   rack:      'Rack',
   tray:      'Tray',
-  server:    'Server (2S)',
-  component: 'Component',
+  superchip: 'Superchip',
 };
 
 const SOURCE_TYPE_LABELS = {
@@ -47,8 +48,13 @@ export class HierarchyView {
     this._renderEmpty();
   }
 
+  _isNvidiaSuperchip() {
+    const p = this.platform;
+    return p && p.vendor === 'NVIDIA' && p.hierarchy.tray != null;
+  }
+
   _levels() {
-    return this.platform?.category === 'GP_SV' ? LEVELS_GP : LEVELS_AI;
+    return this._isNvidiaSuperchip() ? LEVELS_SUPERCHIP : LEVELS_STANDARD;
   }
 
   _render() {
@@ -56,6 +62,8 @@ export class HierarchyView {
     if (!p) { this._renderEmpty(); return; }
 
     const levels = this._levels();
+    // Guard: if stored level no longer exists (e.g. old 'server'/'component'), reset
+    if (!levels.includes(this.currentLevel)) this.currentLevel = 'cluster';
     const curIdx = levels.indexOf(this.currentLevel);
 
     this.el.innerHTML = `
@@ -109,13 +117,21 @@ export class HierarchyView {
 
   _levelHTML(p, level) {
     const h = p.hierarchy;
+    const nvSuperchip = this._isNvidiaSuperchip();
     switch (level) {
-      case 'cluster':   return this._clusterHTML(p, h.cluster);
-      case 'rack':      return this._rackHTML(p, h.rack);
-      case 'tray':      return p.category === 'GP_SV' ? '' : this._trayHTML(p, h.tray);
-      case 'server':    return this._serverHTML(p, h.server);
-      case 'component': return this._componentHTML(p, h.server);
-      default:          return '';
+      case 'cluster':
+        return this._clusterHTML(p, h.cluster);
+      case 'rack':
+        return this._rackHTML(p, h.rack);
+      case 'tray':
+        // NVIDIA superchip platforms: show physical compute tray
+        // All others: repurpose Tray tab to show server/node specs
+        return nvSuperchip ? this._trayHTML(p, h.tray) : this._serverHTML(p, h.server, 'Server Node');
+      case 'superchip':
+        // NVIDIA only — Grace+GPU superchip detail
+        return this._superchipHTML(p, h.server);
+      default:
+        return '';
     }
   }
 
@@ -178,7 +194,9 @@ export class HierarchyView {
       </div>`;
   }
 
-  _serverHTML(p, s) {
+  // label param: 'Server Node' (Tray-repurposed) or default omit
+  _serverHTML(p, s, label = 'Server Node') {
+    if (!s) return '';
     const cpu = s.cpu;
     const gpu = s.gpu || s.accelerator;
     const hl  = this.highlightMemType;
@@ -186,8 +204,8 @@ export class HierarchyView {
     return `
       <div class="level-card">
         <div class="level-card-header">
-          <span class="level-label">Server (2S)</span>
-          <span class="level-name">${s.form_factor}</span>
+          <span class="level-label">${label}</span>
+          <span class="level-name">${s.form_factor || '—'}</span>
         </div>
         <div class="level-card-body">
           ${officialImageHTML(s.official_image)}
@@ -213,52 +231,9 @@ export class HierarchyView {
       </div>`;
   }
 
-  _componentHTML(p, s) {
-    const cpu = s?.cpu;
-    const gpu = s?.gpu || s?.accelerator;
-    const hl  = this.highlightMemType;
-
-    const cpuDiff = hl && cpu?.mem_type !== hl;
-    const gpuDiff = hl && gpu?.mem_type !== hl;
-
-    return `
-      <div class="level-card">
-        <div class="level-card-header">
-          <span class="level-label">Component</span>
-          <span class="level-name">CPU / Accelerator 상세</span>
-        </div>
-        <div class="level-card-body">
-          <div class="component-grid">
-            ${cpu ? `
-              <div class="component-box">
-                <div class="component-box-title">CPU</div>
-                <div class="component-box-name">${cpu.model}</div>
-                <div class="component-box-spec">${cpu.arch || ''} · ${cpu.cores ? cpu.cores + '코어' : ''}</div>
-                ${memBadgeHTML(cpu.mem_type, hl === cpu.mem_type ? 'pulsing' : '')}
-                <div class="component-box-spec">
-                  ${cpu.mem_gb_per_cpu ? cpu.mem_gb_per_cpu + ' GB' : ''}
-                  ${cpu.mem_bandwidth_gbps ? '· ' + cpu.mem_bandwidth_gbps + ' GB/s' : ''}
-                </div>
-                <div class="component-box-spec">${cpu.mem_channels ? cpu.mem_channels + '채널' : ''} ${cpu.dimm_count ? cpu.dimm_count + ' DIMM' : ''}</div>
-              </div>` : ''}
-            ${gpu ? `
-              <div class="component-box${hl && gpu.mem_type !== hl && !cpuDiff ? ' diff' : ''}">
-                <div class="component-box-title">가속기</div>
-                <div class="component-box-name">${gpu.model}</div>
-                <div class="component-box-spec">${gpu.count_per_server}× per 서버</div>
-                ${memBadgeHTML(gpu.mem_type, hl === gpu.mem_type ? 'pulsing' : '')}
-                <div class="component-box-spec">
-                  ${gpu.mem_gb_per_gpu ? gpu.mem_gb_per_gpu + ' GB' : gpu.mem_gb_per_chip ? gpu.mem_gb_per_chip + ' GB' : ''}
-                  ${gpu.mem_bandwidth_tbps ? '· ' + gpu.mem_bandwidth_tbps + ' TB/s' : ''}
-                </div>
-              </div>` : `
-              <div class="component-box">
-                <div class="component-box-title">가속기</div>
-                <div class="component-box-spec" style="color:var(--text-muted)">해당 없음 (GP SV)</div>
-              </div>`}
-          </div>
-        </div>
-      </div>`;
+  // NVIDIA Superchip tab — Grace + GPU Superchip detail
+  _superchipHTML(p, s) {
+    return this._serverHTML(p, s, 'Superchip');
   }
 }
 

@@ -22,11 +22,8 @@
         "description": "576-GPU NVLink Switch fabric spanning multiple NVL72 racks",
         "fabric": "NVLink 5th Gen",
         "official_image": {
-          "file": "assets/official/nvidia/hardware-nvlink-switch-tray.png",
-          "status": "found",
-          "source_type": "oem_manual",
-          "source_url": "https://docs.nvidia.com/dgx/dgxgb200-user-guide/hardware.html",
-          "caption": "DGX GB200 NVLink Switch Tray (Cluster Fabric Element)"
+          "file": null,
+          "status": "not_found"
         }
       },
       "rack": {
@@ -81,11 +78,11 @@
           "interconnect": "NVLink 5th Gen 1800 GB/s"
         },
         "official_image": {
-          "file": "assets/official/nvidia/hardware-compute-tray-block-diagram.png",
+          "file": "assets/official/nvidia/hardware-compute-tray-top.png",
           "status": "found",
           "source_type": "oem_manual",
           "source_url": "https://docs.nvidia.com/dgx/dgxgb200-user-guide/hardware.html",
-          "caption": "GB200 Superchip Block Diagram"
+          "caption": "GB200 Superchip — Compute Tray Top View"
         }
       }
     },
@@ -7762,21 +7759,21 @@
         "description": "9,216-chip Ironwood Superpod (144 cubes) connected via OCS",
         "fabric": "ICI 9.6 Tb/s + Optical Circuit Switching (OCS)",
         "official_image": {
-          "file": "assets/official/google/ironwood-ocs-topology.jpg",
+          "file": "assets/official/google/ironwood-superpod.png",
           "status": "found",
           "source_type": "official_blog",
-          "source_url": "https://cloud.google.com/blog/products/compute/inside-the-ironwood-tpu-codesigned-ai-stack",
-          "caption": "Ironwood OCS Cube Topology"
+          "source_url": "https://cloud.google.com/blog/products/compute/ironwood-tpus-and-new-axion-based-vms-for-your-ai-workloads",
+          "caption": "Ironwood Superpod — 9,216 TPU Chips"
         }
       },
       "rack": {
         "label": "Ironwood Cube (64 chips)",
         "official_image": {
-          "file": "assets/official/google/ironwood-3d-torus.png",
+          "file": "assets/official/google/ironwood-cdu.jpg",
           "status": "found",
           "source_type": "official_blog",
-          "source_url": "https://cloud.google.com/blog/products/compute/inside-the-ironwood-tpu-codesigned-ai-stack",
-          "caption": "Ironwood 3D Torus Intra-Cube Network"
+          "source_url": "https://cloud.google.com/blog/products/compute/ironwood-tpus-and-new-axion-based-vms-for-your-ai-workloads",
+          "caption": "Ironwood Superpod — 3세대 CDU 액체 냉각 시스템"
         },
         "servers_per_rack": 8,
         "total_accelerators": 64
@@ -7787,11 +7784,11 @@
         "cpu": null,
         "accelerator": null,
         "official_image": {
-          "file": "assets/official/google/ironwood-chip-layout.png",
+          "file": "assets/official/google/ironwood-board-tpu.png",
           "status": "found",
           "source_type": "official_blog",
-          "source_url": "https://cloud.google.com/blog/products/compute/inside-the-ironwood-tpu-codesigned-ai-stack",
-          "caption": "Ironwood Chip Layout (2 chiplets per die)"
+          "source_url": "https://cloud.google.com/blog/products/compute/ironwood-tpus-and-new-axion-based-vms-for-your-ai-workloads",
+          "caption": "Ironwood Board — TPU 3개 + 액체 냉각"
         }
       }
     },

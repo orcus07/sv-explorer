@@ -429,6 +429,15 @@ button { cursor: pointer; border: none; background: none; font: inherit; color: 
 }
 .card-category-badge.ai { color: var(--accent-hover); border-color: var(--accent); background: var(--accent-dim); }
 
+/* Official-image badge on card */
+.card-img-badge {
+  font-size: 0.7rem;
+  line-height: 1;
+  opacity: 0.75;
+  cursor: default;
+  user-select: none;
+}
+
 .card-mem-row {
   display: flex;
   flex-wrap: wrap;
