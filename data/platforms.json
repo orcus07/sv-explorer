@@ -2365,7 +2365,29 @@
       "host_mem_note": "DDR5 RDIMM 4800MT/s 2TB system",
       "accel_mem_note": "HBM3 80GB per H100 SXM5"
     },
-    "images": []
+    "images": [
+      {
+        "level": "cluster",
+        "file": "assets/official/nvidia/h100_superpod_su_rack_layout.png",
+        "caption": "DGX H100 SuperPOD – single SU rack layout (32 DGX H100 nodes) (NVIDIA RA doc)",
+        "source_type": "official_doc",
+        "source_url": "https://docs.nvidia.com/dgx-superpod/reference-architecture-scalable-infrastructure-h100/latest/"
+      },
+      {
+        "level": "tray",
+        "file": "assets/official/nvidia/h100_dgx_server_front_bezel.png",
+        "caption": "NVIDIA DGX H100 server (8U rackmount) with bezel (NVIDIA DGX H100 User Guide)",
+        "source_type": "oem_manual",
+        "source_url": "https://docs.nvidia.com/dgx/dgxh100-user-guide/"
+      },
+      {
+        "level": "tray",
+        "file": "assets/official/nvidia/h100_dgx_gpu_tray_internal.png",
+        "caption": "NVIDIA DGX H100 GPU tray – 8x H100 SXM5 GPUs (NVIDIA DGX H100 User Guide)",
+        "source_type": "oem_manual",
+        "source_url": "https://docs.nvidia.com/dgx/dgxh100-user-guide/"
+      }
+    ]
   },
   {
     "platform_id": "dell_xe9680_h100",
@@ -6943,7 +6965,22 @@
       "host_mem_note": "DDR5 RDIMM",
       "accel_mem_note": "HBM2e 16GB per TPU v5e"
     },
-    "images": []
+    "images": [
+      {
+        "level": "tray",
+        "file": "assets/official/google/tpu_v5e_board_overhead.jpg",
+        "caption": "Google TPU v5e board – 4 chips visible (SC23, ServeTheHome Nov 2023)",
+        "source_type": "keynote_slide",
+        "source_url": "https://www.servethehome.com"
+      },
+      {
+        "level": "tray",
+        "file": "assets/official/google/tpu_v5e_chips_no_heatsink.jpg",
+        "caption": "Google TPU v5e – chips without heatsinks (SC23, ServeTheHome Nov 2023)",
+        "source_type": "keynote_slide",
+        "source_url": "https://www.servethehome.com"
+      }
+    ]
   },
   {
     "platform_id": "tpu_v4",
