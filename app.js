@@ -74,11 +74,7 @@ function applyFilters() {
 }
 
 function platformHasOfficialImage(p) {
-  const h = p.hierarchy;
-  return ['cluster', 'rack', 'tray', 'server'].some(lvl => {
-    const node = h[lvl];
-    return node && node.official_image && node.official_image.status === 'found';
-  });
+  return (p.images || []).some(img => img.file);
 }
 
 function normalizeVendor(v) {

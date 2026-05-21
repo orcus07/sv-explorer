@@ -18,6 +18,7 @@ const SOURCE_TYPE_LABELS = {
   datasheet_pdf: '공식 데이터시트',
   product_page:  '공식 제품 페이지',
   official_blog: '공식 블로그',
+  official_doc:  '공식 기술 문서',
   oem_manual:    'OEM 사용설명서',
   odm_guide:     'ODM 제품 가이드',
   neocloud_blog: '공식 블로그',
@@ -143,7 +144,7 @@ export class HierarchyView {
           <span class="level-name">${c.label}</span>
         </div>
         <div class="level-card-body">
-          ${allImagesHTML(c)}
+          ${levelImagesHTML(p, 'cluster')}
           <table class="spec-table">
             <tr><td>인터커넥트</td><td>${c.fabric || '—'}</td></tr>
             <tr><td>설명</td><td>${c.description || '—'}</td></tr>
@@ -160,7 +161,7 @@ export class HierarchyView {
           <span class="level-name">${r.label}</span>
         </div>
         <div class="level-card-body">
-          ${allImagesHTML(r)}
+          ${levelImagesHTML(p, 'rack')}
           <table class="spec-table">
             ${r.trays_per_rack != null ? `<tr><td>Tray 수</td><td>${r.trays_per_rack}</td></tr>` : ''}
             ${r.total_gpus != null ? `<tr><td>총 GPU 수</td><td>${r.total_gpus}</td></tr>` : ''}
@@ -182,7 +183,7 @@ export class HierarchyView {
           <span class="level-name">${t.label}</span>
         </div>
         <div class="level-card-body">
-          ${allImagesHTML(t)}
+          ${levelImagesHTML(p, 'tray')}
           <table class="spec-table">
             ${t.count_per_rack != null ? `<tr><td>Rack당 Tray 수</td><td>${t.count_per_rack}</td></tr>` : ''}
             ${t.superchips_per_tray != null ? `<tr><td>Superchip 수</td><td>${t.superchips_per_tray}</td></tr>` : ''}
@@ -194,8 +195,8 @@ export class HierarchyView {
       </div>`;
   }
 
-  // label param: 'Server Node' (Tray-repurposed) or default omit
-  _serverHTML(p, s, label = 'Server Node') {
+  // label: display tab name; imgLevel: which level to pull images from
+  _serverHTML(p, s, label = 'Server Node', imgLevel = 'tray') {
     if (!s) return '';
     const cpu = s.cpu;
     const gpu = s.gpu || s.accelerator;
@@ -208,7 +209,7 @@ export class HierarchyView {
           <span class="level-name">${s.form_factor || '—'}</span>
         </div>
         <div class="level-card-body">
-          ${allImagesHTML(s)}
+          ${levelImagesHTML(p, imgLevel)}
           <table class="spec-table">
             ${cpu ? `
               <tr><td>CPU 모델</td><td>${cpu.model}</td></tr>
@@ -233,27 +234,15 @@ export class HierarchyView {
 
   // NVIDIA Superchip tab — Grace + GPU Superchip detail
   _superchipHTML(p, s) {
-    return this._serverHTML(p, s, 'Superchip');
+    return this._serverHTML(p, s, 'Superchip', 'superchip');
   }
 }
 
-// Renders all images for a level node (primary official_image + extra_images array)
-function allImagesHTML(node) {
-  if (!node) return placeholderHTML('이미지 정보 없음');
-
-  const primary = node.official_image;
-  const extras  = (node.extra_images || []).filter(e => e && e.status === 'found' && e.file);
-
-  // Collect renderable images
-  const images = [];
-  if (primary && primary.status === 'found' && primary.file) images.push(primary);
-  images.push(...extras);
-
-  if (images.length === 0) {
-    const note = primary?.note || '공식 발표 자료에서 확인된 이미지가 없습니다.';
-    return placeholderHTML(note);
-  }
-  return images.map(img => singleImageHTML(img)).join('');
+// Renders all images for a given hierarchy level from the platform's flat images[]
+function levelImagesHTML(p, level) {
+  const imgs = (p.images || []).filter(img => img.level === level && img.file);
+  if (imgs.length === 0) return placeholderHTML('공식 발표 자료에서 확인된 이미지가 없습니다.');
+  return imgs.map(img => singleImageHTML(img)).join('');
 }
 
 function singleImageHTML(img) {

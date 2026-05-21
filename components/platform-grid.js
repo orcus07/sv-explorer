@@ -119,11 +119,7 @@ export class PlatformGrid {
   }
 
   _hasOfficialImage(p) {
-    const h = p.hierarchy;
-    return ['cluster', 'rack', 'tray', 'server'].some(lvl => {
-      const node = h[lvl];
-      return node && node.official_image && node.official_image.status === 'found';
-    });
+    return (p.images || []).some(img => img.file);
   }
 
   _cardHTML(p, { selectedId, compareId, highlightActive, matchesHighlight, compareMode, highlightMemType }) {
