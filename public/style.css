@@ -191,9 +191,17 @@ body {
   padding-left: 13px; border-left: 2px solid var(--border);
 }
 
-#r-terms { display: grid; grid-template-columns: max-content 1fr; gap: 7px 18px; }
-#r-terms dt { font-weight: 700; color: var(--link); }
-#r-terms dd { margin: 0; }
+#r-terms { display: block; }
+#r-terms dt { font-weight: 700; color: var(--link); margin-top: 12px; }
+#r-terms dt:first-child { margin-top: 0; }
+#r-terms dd { margin: 2px 0 0; line-height: 1.6; }
+
+.notice {
+  margin: 0 0 18px; padding: 12px 14px;
+  background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412;
+  border-radius: 10px; font-size: 14px; line-height: 1.6;
+}
+.notice b { font-weight: 700; }
 
 .result-actions { display: flex; gap: 10px; margin: 30px 0 10px; }
 

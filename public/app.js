@@ -163,6 +163,21 @@ function show(item) {
 
   renderTranscript(item);
 
+  // 빈 섹션 숨김 + 자막 미수집 안내
+  const hasChapters = (item.chapters || []).length > 0;
+  const hasTranscript = (item.transcript || []).length > 0;
+  $("chapters-block").classList.toggle("hidden", !hasChapters);
+  $("transcript-block").classList.toggle("hidden", !hasTranscript);
+  const notice = $("thin-notice");
+  if (!hasTranscript) {
+    notice.innerHTML =
+      "⚠️ 이 영상은 <b>자막 본문</b>을 자동으로 가져오지 못해 영상 설명 기반으로만 요약했어요. " +
+      "전체 한글·원문 트랜스크립트가 필요하면 위 <b>“자막 직접 붙여넣기”</b>로 다시 처리해 주세요.";
+    notice.classList.remove("hidden");
+  } else {
+    notice.classList.add("hidden");
+  }
+
   // 핵심 용어
   const dl = $("r-terms");
   dl.innerHTML = "";
