@@ -219,15 +219,16 @@ export async function distill(source, meta = {}) {
 
   const hdr = header(meta);
   const estTokens = estimateOutputTokens(transcriptText.length);
+  const isRaw = !source.segments;
 
   // 단일 패스 (대부분의 영상)
   if (estTokens <= SINGLE_PASS_BUDGET) {
-    const result = await callJson({
-      schema: FULL_SCHEMA,
-      maxTokens: estTokens,
-      userText: `${hdr}\n\n아래는 유튜브 영상 자막이다. 각 줄 앞 [숫자]는 시작 시점(초)이다.\n위 원칙에 따라 구조 요약과 한글·원문 병기 트랜스크립트로 정리해줘.\n\n---\n${transcriptText}`,
-    });
-    return result;
+    const userText = isRaw
+      ? `${hdr}\n\n아래는 유튜브 영상 페이지에서 자동 추출한 텍스트다(리더 프록시 결과, 정밀 타임스탬프 없음).\n` +
+        `- 실제 발화(음성) 자막 본문이 들어 있으면 그것을 문단 단위 한글·원문 병기 트랜스크립트로 충실히 정리하고, timestamp는 ""·seconds는 0으로 둬라.\n` +
+        `- 실제 자막 본문이 없고 제목·설명·댓글·관련영상 같은 메타데이터뿐이면, transcript와 chapters는 반드시 빈 배열([])로 두고 변명·설명 문구를 거기에 넣지 마라. 그 경우 oneLiner·topic·keyTakeaways는 확보된 정보 범위에서 작성하되, 내용이 영상 설명 기반임을 topic 끝에 한 문장으로 밝혀라.\n\n---\n${transcriptText}`
+      : `${hdr}\n\n아래는 유튜브 영상 자막이다. 각 줄 앞 [숫자]는 시작 시점(초)이다.\n위 원칙에 따라 구조 요약과 한글·원문 병기 트랜스크립트로 정리해줘.\n\n---\n${transcriptText}`;
+    return await callJson({ schema: FULL_SCHEMA, maxTokens: estTokens, userText });
   }
 
   // 자동 폴백: 구조 요약(1회) + 트랜스크립트(청크별)
