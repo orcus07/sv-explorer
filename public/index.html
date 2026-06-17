@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>유튜브 트랜스크립트 · 구조 증류 리더</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="app-header">
+    <h1>🎬 유튜브 트랜스크립트 · 구조 증류 리더</h1>
+    <p class="subtitle">유튜브 링크를 던지면 영상 구조를 목차로 요약하고, 자막을 한글·원문 병기로 충실히 정리해 — <b>반도체 마케터 · AI 동향</b> 관점</p>
+    <p id="key-warning" class="warning hidden"></p>
+  </header>
+
+  <main class="layout">
+    <aside class="sidebar">
+      <input id="search" type="search" placeholder="본 영상 검색…" />
+      <ul id="list" class="list"></ul>
+      <p id="empty-list" class="muted">아직 정리한 영상이 없습니다.</p>
+    </aside>
+
+    <section class="main">
+      <!-- 링크 입력 -->
+      <div class="input-row">
+        <input id="url" type="url" placeholder="유튜브 링크를 붙여넣고 Enter…  (예: https://youtu.be/...)" />
+        <button id="run-btn" class="btn btn-primary">증류</button>
+      </div>
+      <div class="sub-row">
+        <button id="toggle-paste" class="link-btn">자막이 막히면 → 자막 직접 붙여넣기</button>
+        <span id="status" class="status"></span>
+      </div>
+
+      <!-- 자막 붙여넣기(접힘) -->
+      <div id="paste-box" class="paste-box hidden">
+        <input id="paste-title" type="text" placeholder="(선택) 영상 제목" />
+        <input id="paste-url" type="url" placeholder="(선택) 영상 링크 — 임베드 플레이어용" />
+        <textarea id="paste-text" rows="6" placeholder="여기에 영상 자막(트랜스크립트)을 붙여넣으세요"></textarea>
+        <button id="paste-run" class="btn btn-primary">붙여넣은 자막 증류</button>
+      </div>
+
+      <!-- 결과 -->
+      <article id="result" class="result hidden">
+        <span id="r-source" class="badge"></span>
+        <h2 id="r-title"></h2>
+        <p id="r-original" class="muted small"></p>
+        <p id="r-meta" class="muted small"></p>
+
+        <!-- 임베드 플레이어 -->
+        <div id="player-wrap" class="player-wrap hidden"><div id="player"></div></div>
+
+        <blockquote id="r-oneliner"></blockquote>
+
+        <h3>이 영상은?</h3>
+        <p id="r-topic"></p>
+
+        <h3>💡 핵심 시사점</h3>
+        <ul id="r-takeaways"></ul>
+
+        <h3>📌 반도체 마케터 관점 <span id="r-relevance" class="relevance"></span></h3>
+        <ul id="r-angle"></ul>
+        <p id="r-angle-none" class="muted small hidden">이 영상은 반도체·AI 마케팅과 직접 연관은 약해요.</p>
+
+        <h3>🧭 구조 요약 (타임스탬프 목차)</h3>
+        <ul id="r-chapters" class="chapters"></ul>
+
+        <div class="transcript-head">
+          <h3>📝 트랜스크립트 (한글·원문 병기)</h3>
+          <label class="toggle"><input type="checkbox" id="show-original" checked /> 원문 함께 보기</label>
+        </div>
+        <div id="r-transcript" class="transcript"></div>
+
+        <section id="r-terms-wrap">
+          <h3>핵심 용어</h3>
+          <dl id="r-terms"></dl>
+        </section>
+
+        <div class="result-actions">
+          <a id="r-link" class="btn" target="_blank" rel="noopener">유튜브에서 열기 ↗</a>
+          <button id="delete-btn" class="btn btn-danger hidden">보관함에서 삭제</button>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
