@@ -168,7 +168,50 @@ async function segmentsFromPlayer(player, lang, userAgent) {
   };
 }
 
-/** 전략 1: InnerTube player API (ANDROID → IOS). */
+/** 전략 1: 자막 추출 전문 API(Supadata). 주거용 IP로 대신 가져와 가장 안정적.
+ *  SUPADATA_API_KEY 가 있을 때만 동작(없으면 즉시 폴백). 무료 티어: https://supadata.ai */
+async function trySupadata(videoId) {
+  const key = process.env.SUPADATA_API_KEY;
+  if (!key) throw new Error("Supadata 키 미설정");
+  const url = `https://api.supadata.ai/v1/youtube/transcript?videoId=${videoId}&text=false`;
+  const res = await fetch(url, { headers: { "x-api-key": key } });
+  if (!res.ok) throw new Error(`Supadata HTTP ${res.status}`);
+  const data = await res.json();
+  const items = Array.isArray(data.content)
+    ? data.content
+    : Array.isArray(data.transcript)
+      ? data.transcript
+      : null;
+  if (!items || items.length === 0) throw new Error("Supadata 자막 비어 있음");
+
+  const segments = items
+    .map((it) => {
+      const raw = it.offset != null ? Number(it.offset) / 1000 : Number(it.start ?? 0);
+      return {
+        start: Math.max(0, Math.floor(raw || 0)),
+        text: String(it.text ?? it.content ?? "").replace(/\s+/g, " ").trim(),
+      };
+    })
+    .filter((s) => s.text);
+  if (segments.length === 0) throw new Error("Supadata 자막 파싱 실패");
+
+  // 제목·채널은 best-effort (실패해도 무시)
+  let title = "", channel = "";
+  try {
+    const m = await fetch(`https://api.supadata.ai/v1/youtube/video?id=${videoId}`, {
+      headers: { "x-api-key": key },
+    });
+    if (m.ok) {
+      const md = await m.json();
+      title = md.title || "";
+      channel = md.channel?.name || md.channelTitle || md.channel || "";
+    }
+  } catch {}
+
+  return { title, channel, publishedDate: "", segments, via: "supadata" };
+}
+
+/** 전략 2: InnerTube player API (ANDROID → IOS). */
 async function tryInnertube(videoId, lang) {
   let lastErr;
   for (const c of INNERTUBE_CLIENTS) {
@@ -253,7 +296,7 @@ export async function fetchTranscript(input, { lang = "ko" } = {}) {
   }
 
   const errors = [];
-  for (const strategy of [tryInnertube, tryWatchPage, tryReaderProxy]) {
+  for (const strategy of [trySupadata, tryInnertube, tryWatchPage, tryReaderProxy]) {
     try {
       const out = await strategy(videoId, lang);
       return { videoId, ...out };
@@ -264,7 +307,7 @@ export async function fetchTranscript(input, { lang = "ko" } = {}) {
 
   throw new Error(
     `이 영상의 자막을 가져오지 못했습니다 (${errors.join(" / ")}). ` +
-      `유튜브가 이 서버 IP를 차단했을 수 있어요. "자막 직접 붙여넣기"로 처리하거나, ` +
-      `서버에 YT_PROXY(주거용 프록시)를 설정해 보세요.`,
+      `유튜브가 이 서버 IP를 차단했을 수 있어요. 안정적인 자동 추출을 원하면 ` +
+      `SUPADATA_API_KEY(무료, supadata.ai)를 설정하거나, "자막 직접 붙여넣기"로 처리해 주세요.`,
   );
 }
