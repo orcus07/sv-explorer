@@ -216,6 +216,28 @@ async function tryWatchPage(videoId, lang) {
 }
 
 /**
+ * 전략 3: 리더 프록시(Jina). 유튜브를 Jina 서버가 대신 가져와 본문/자막 텍스트로 돌려준다.
+ * IP 차단을 피하지만 정밀 타임스탬프는 없어, 본문 텍스트(rawText)로 반환한다.
+ */
+async function tryReaderProxy(videoId) {
+  const proxy = process.env.READER_PROXY || "https://r.jina.ai/";
+  const res = await fetch(proxy + `https://www.youtube.com/watch?v=${videoId}`, {
+    headers: { "Accept-Language": "en-US,en;q=0.9", "X-Return-Format": "text" },
+  });
+  if (!res.ok) throw new Error(`리더 프록시 HTTP ${res.status}`);
+  let text = (await res.text()).trim();
+  if (text.length < 300) throw new Error("리더 프록시 결과가 너무 짧음(자막 없음)");
+
+  // Jina 응답 앞머리(Title:/URL Source:/Markdown Content:)에서 제목만 떼고 본문만 남긴다.
+  const tm = text.match(/^Title:\s*(.+)$/m);
+  const title = tm ? tm[1].trim() : "";
+  const mc = text.indexOf("Markdown Content:");
+  if (mc !== -1) text = text.slice(mc + "Markdown Content:".length).trim();
+
+  return { title, channel: "", publishedDate: "", rawText: text, via: "proxy" };
+}
+
+/**
  * 유튜브 URL/ID에서 자막과 메타데이터를 가져온다.
  * @param {string} input - 유튜브 링크 또는 video ID
  * @param {{lang?: string}} [opts] - 선호 자막 언어 (기본 ko, 없으면 en→기타)
@@ -227,7 +249,7 @@ export async function fetchTranscript(input, { lang = "ko" } = {}) {
   }
 
   const errors = [];
-  for (const strategy of [tryInnertube, tryWatchPage]) {
+  for (const strategy of [tryInnertube, tryWatchPage, tryReaderProxy]) {
     try {
       const out = await strategy(videoId, lang);
       return { videoId, ...out };

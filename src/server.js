@@ -25,10 +25,13 @@ app.post("/api/digest", async (req, res) => {
   if (!url) return res.status(400).json({ error: "링크가 없습니다." });
   try {
     const t = await fetchTranscript(url.trim());
-    const result = await distill(
-      { segments: t.segments },
-      { title: t.title, channel: t.channel, publishedDate: t.publishedDate, url },
-    );
+    const source = t.segments ? { segments: t.segments } : { rawText: t.rawText };
+    const result = await distill(source, {
+      title: t.title,
+      channel: t.channel,
+      publishedDate: t.publishedDate,
+      url,
+    });
     res.json({ videoId: t.videoId, url, via: t.via, ...result });
   } catch (err) {
     res.status(502).json({ error: err.message || "처리 중 오류가 발생했습니다." });
