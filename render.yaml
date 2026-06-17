@@ -12,6 +12,9 @@ services:
       # API 키는 보안상 여기 적지 않고, Render 대시보드에서 직접 입력한다(sync: false).
       - key: ANTHROPIC_API_KEY
         sync: false
+      # (추천) 자막 추출 전문 API 키 — 링크 자동 추출 안정화. 대시보드에서 입력.
+      - key: SUPADATA_API_KEY
+        sync: false
       # (선택) 유튜브 차단 우회용 주거용 프록시. 필요할 때만 대시보드에서 입력.
       - key: YT_PROXY
         sync: false
