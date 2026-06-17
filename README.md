@@ -43,8 +43,9 @@ npm start                 # http://localhost:3000
 
 ## 클라우드 배포 (폰·PC 어디서나 쓰기)
 
-[`render.yaml`](render.yaml) 블루프린트가 포함되어 있습니다. Render에서 이 저장소를 연결하면
-자동으로 웹 서비스가 생성됩니다. API 키는 Render 대시보드의 환경변수(`ANTHROPIC_API_KEY`)에 직접 입력하세요.
+노트북을 켜둘 필요 없이 항상 떠 있는 주소를 만들려면 → [`DEPLOY.md`](DEPLOY.md) (Render 무료 배포, 클릭 위주 안내).
+[`render.yaml`](render.yaml) 블루프린트가 포함되어 있어 저장소만 연결하면 서비스가 자동 생성되며,
+API 키는 Render 대시보드의 환경변수(`ANTHROPIC_API_KEY`)에 직접 입력합니다.
 
 ## 사용법
 
