@@ -221,9 +221,13 @@ async function tryWatchPage(videoId, lang) {
  */
 async function tryReaderProxy(videoId) {
   const proxy = process.env.READER_PROXY || "https://r.jina.ai/";
-  const res = await fetch(proxy + `https://www.youtube.com/watch?v=${videoId}`, {
-    headers: { "Accept-Language": "en-US,en;q=0.9", "X-Return-Format": "text" },
-  });
+  const headers = { "Accept-Language": "en-US,en;q=0.9", "X-Return-Format": "text" };
+  // 무료 Jina API 키가 있으면 인증 리더 사용 — 유튜브 자막 추출 성공률이 올라간다.
+  if (process.env.JINA_API_KEY) {
+    headers.Authorization = `Bearer ${process.env.JINA_API_KEY}`;
+    headers["X-Engine"] = "browser"; // 자막 패널이 로드되도록 렌더링
+  }
+  const res = await fetch(proxy + `https://www.youtube.com/watch?v=${videoId}`, { headers });
   if (!res.ok) throw new Error(`리더 프록시 HTTP ${res.status}`);
   let text = (await res.text()).trim();
   if (text.length < 300) throw new Error("리더 프록시 결과가 너무 짧음(자막 없음)");

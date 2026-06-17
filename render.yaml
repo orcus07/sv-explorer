@@ -15,5 +15,8 @@ services:
       # (선택) 유튜브 차단 우회용 주거용 프록시. 필요할 때만 대시보드에서 입력.
       - key: YT_PROXY
         sync: false
+      # (선택) Jina 무료 API 키 — 유튜브 자막 추출 성공률 향상. 대시보드에서 입력.
+      - key: JINA_API_KEY
+        sync: false
       - key: NODE_VERSION
         value: "22"
