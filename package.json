@@ -1,0 +1,19 @@
+{
+  "name": "yt-distill-reader",
+  "version": "1.0.0",
+  "description": "유튜브 링크를 던지면 영상 구조를 목차로 요약하고 자막을 한글·원문 병기로 정리해주는 리더 (AI 동향 / 반도체 마케터 관점)",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.40.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2"
+  }
+}

@@ -1,0 +1,16 @@
+# Render 배포 설정 (Blueprint).
+# Render 대시보드에서 이 저장소를 연결하면 이 파일을 읽어 자동으로 서비스를 만든다.
+services:
+  - type: web
+    name: yt-distill-reader
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      # API 키는 보안상 여기 적지 않고, Render 대시보드에서 직접 입력한다(sync: false).
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: NODE_VERSION
+        value: "22"
