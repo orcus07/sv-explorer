@@ -7,80 +7,109 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <header class="app-header">
-    <h1>🎬 유튜브 트랜스크립트 · 구조 증류 리더</h1>
-    <p class="subtitle">유튜브 링크를 던지면 영상 구조를 목차로 요약하고, 자막을 한글·원문 병기로 충실히 정리해 — <b>반도체 마케터 · AI 동향</b> 관점</p>
-    <p id="key-warning" class="warning hidden"></p>
+  <!-- 상단 고정 바: 메뉴 + 브랜드 + 링크 입력 -->
+  <header class="topbar">
+    <button id="menu-btn" class="icon-btn" aria-label="보관함 열기">☰</button>
+    <div class="brand">🎬 <span>유튜브 증류 리더</span></div>
+    <form id="url-form" class="url-form">
+      <input id="url" type="url" placeholder="유튜브 링크를 붙여넣고 Enter…  (예: https://youtu.be/...)" />
+      <button id="run-btn" type="submit" class="btn btn-primary">증류</button>
+    </form>
   </header>
+  <p id="key-warning" class="warning hidden"></p>
 
-  <main class="layout">
-    <aside class="sidebar">
-      <input id="search" type="search" placeholder="본 영상 검색…" />
-      <ul id="list" class="list"></ul>
-      <p id="empty-list" class="muted">아직 정리한 영상이 없습니다.</p>
-    </aside>
+  <!-- 보관함 서랍 -->
+  <aside id="drawer" class="drawer">
+    <div class="drawer-head">
+      <strong>📚 보관함</strong>
+      <button id="drawer-close" class="icon-btn" aria-label="닫기">×</button>
+    </div>
+    <input id="search" type="search" placeholder="본 영상 검색…" />
+    <ul id="list" class="list"></ul>
+    <p id="empty-list" class="muted">아직 정리한 영상이 없습니다.</p>
+  </aside>
+  <div id="scrim" class="scrim hidden"></div>
 
-    <section class="main">
-      <!-- 링크 입력 -->
-      <div class="input-row">
-        <input id="url" type="url" placeholder="유튜브 링크를 붙여넣고 Enter…  (예: https://youtu.be/...)" />
-        <button id="run-btn" class="btn btn-primary">증류</button>
-      </div>
-      <div class="sub-row">
-        <button id="toggle-paste" class="link-btn">자막이 막히면 → 자막 직접 붙여넣기</button>
-        <span id="status" class="status"></span>
-      </div>
+  <main class="page">
+    <div class="sub-row">
+      <button id="toggle-paste" class="link-btn">자막이 막히면 → 자막 직접 붙여넣기</button>
+      <span id="status" class="status"></span>
+    </div>
 
-      <!-- 자막 붙여넣기(접힘) -->
-      <div id="paste-box" class="paste-box hidden">
-        <input id="paste-title" type="text" placeholder="(선택) 영상 제목" />
-        <input id="paste-url" type="url" placeholder="(선택) 영상 링크 — 임베드 플레이어용" />
-        <textarea id="paste-text" rows="6" placeholder="여기에 영상 자막(트랜스크립트)을 붙여넣으세요"></textarea>
-        <button id="paste-run" class="btn btn-primary">붙여넣은 자막 증류</button>
-      </div>
+    <!-- 자막 붙여넣기(접힘) -->
+    <div id="paste-box" class="paste-box hidden">
+      <input id="paste-title" type="text" placeholder="(선택) 영상 제목" />
+      <input id="paste-url" type="url" placeholder="(선택) 영상 링크 — 임베드 플레이어용" />
+      <textarea id="paste-text" rows="6" placeholder="여기에 영상 자막(트랜스크립트)을 붙여넣으세요"></textarea>
+      <button id="paste-run" class="btn btn-primary">붙여넣은 자막 증류</button>
+    </div>
 
-      <!-- 결과 -->
-      <article id="result" class="result hidden">
+    <!-- 비어있을 때 안내 -->
+    <div id="empty-state" class="empty-state">
+      <div class="empty-emoji">🎬→📝</div>
+      <p>유튜브 링크를 붙여넣으면 <b>영상 구조 요약</b>과 <b>한글·원문 병기 트랜스크립트</b>로 정리해 드려요.</p>
+      <p class="muted small">반도체 마케터 · AI 동향 관점으로 증류합니다.</p>
+    </div>
+
+    <!-- 결과 -->
+    <article id="result" class="result hidden">
+      <header class="r-head">
         <span id="r-source" class="badge"></span>
-        <h2 id="r-title"></h2>
+        <h1 id="r-title"></h1>
         <p id="r-original" class="muted small"></p>
         <p id="r-meta" class="muted small"></p>
+      </header>
 
-        <!-- 임베드 플레이어 -->
-        <div id="player-wrap" class="player-wrap hidden"><div id="player"></div></div>
+      <blockquote id="r-oneliner"></blockquote>
 
-        <blockquote id="r-oneliner"></blockquote>
+      <div class="r-grid" id="r-grid">
+        <div class="r-body">
+          <section class="block">
+            <h3>이 영상은?</h3>
+            <p id="r-topic"></p>
+          </section>
 
-        <h3>이 영상은?</h3>
-        <p id="r-topic"></p>
+          <section class="block">
+            <h3>💡 핵심 시사점</h3>
+            <ul id="r-takeaways"></ul>
+          </section>
 
-        <h3>💡 핵심 시사점</h3>
-        <ul id="r-takeaways"></ul>
+          <section class="block">
+            <h3>📌 반도체 마케터 관점 <span id="r-relevance" class="relevance"></span></h3>
+            <ul id="r-angle"></ul>
+            <p id="r-angle-none" class="muted small hidden">이 영상은 반도체·AI 마케팅과 직접 연관은 약해요.</p>
+          </section>
 
-        <h3>📌 반도체 마케터 관점 <span id="r-relevance" class="relevance"></span></h3>
-        <ul id="r-angle"></ul>
-        <p id="r-angle-none" class="muted small hidden">이 영상은 반도체·AI 마케팅과 직접 연관은 약해요.</p>
+          <section class="block">
+            <h3>🧭 구조 요약 <span class="muted small">(타임스탬프 클릭 → 영상·본문 이동)</span></h3>
+            <ul id="r-chapters" class="chapters"></ul>
+          </section>
 
-        <h3>🧭 구조 요약 (타임스탬프 목차)</h3>
-        <ul id="r-chapters" class="chapters"></ul>
+          <section class="block">
+            <div class="transcript-head">
+              <h3>📝 트랜스크립트 <span class="muted small">한글·원문 병기</span></h3>
+              <label class="toggle"><input type="checkbox" id="show-original" checked /> 원문 함께</label>
+            </div>
+            <div id="r-transcript" class="transcript"></div>
+          </section>
 
-        <div class="transcript-head">
-          <h3>📝 트랜스크립트 (한글·원문 병기)</h3>
-          <label class="toggle"><input type="checkbox" id="show-original" checked /> 원문 함께 보기</label>
+          <section class="block" id="r-terms-wrap">
+            <h3>🔑 핵심 용어</h3>
+            <dl id="r-terms"></dl>
+          </section>
+
+          <div class="result-actions">
+            <a id="r-link" class="btn" target="_blank" rel="noopener">유튜브에서 열기 ↗</a>
+            <button id="delete-btn" class="btn btn-danger hidden">보관함에서 삭제</button>
+          </div>
         </div>
-        <div id="r-transcript" class="transcript"></div>
 
-        <section id="r-terms-wrap">
-          <h3>핵심 용어</h3>
-          <dl id="r-terms"></dl>
-        </section>
-
-        <div class="result-actions">
-          <a id="r-link" class="btn" target="_blank" rel="noopener">유튜브에서 열기 ↗</a>
-          <button id="delete-btn" class="btn btn-danger hidden">보관함에서 삭제</button>
-        </div>
-      </article>
-    </section>
+        <!-- 오른쪽 sticky 레일: 영상 -->
+        <aside class="r-rail">
+          <div id="player-wrap" class="player-wrap hidden"><div id="player"></div></div>
+        </aside>
+      </div>
+    </article>
   </main>
 
   <script src="app.js"></script>
