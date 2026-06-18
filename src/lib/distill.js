@@ -96,10 +96,15 @@ const TRANSCRIPT_PROP = {
       properties: {
         timestamp: { type: "string", description: "이 문단 시작 시점 mm:ss(없으면 빈 문자열)" },
         seconds: { type: "integer", description: "문단 시작 시점(초). 모르면 0" },
+        speaker: {
+          type: "string",
+          description:
+            "이 문단을 말한 화자. 인터뷰·대담처럼 화자가 구분되고 대화 흐름·원문 단서로 누가 말하는지 합리적으로 추정될 때만 채운다. 원문에서 실명이 식별되면 실명, 아니면 '진행자'/'게스트' 또는 '화자 A'/'화자 B'. 독백이거나 화자 구분이 불확실하면 빈 문자열(지어내지 말 것).",
+        },
         original: { type: "string", description: "원문 그대로의 문단(원어)" },
         korean: { type: "string", description: "해당 문단의 한글 번역(맥락 손실 최소화)" },
       },
-      required: ["timestamp", "seconds", "original", "korean"],
+      required: ["timestamp", "seconds", "speaker", "original", "korean"],
       additionalProperties: false,
     },
   },
@@ -148,6 +153,11 @@ const SYSTEM = `너는 유튜브 영상의 자막을 한국어로 옮겨 정리�
   · 영상이 반도체·AI와 직접 관련되면 relevance를 high/medium으로 두고 구체적으로 연결한다.
   · 관련이 약하거나 없으면 relevance를 low/none으로 솔직히 표시하고, notes에 그 점을 밝힌다. 억지로 HBM/칩 수요 등에 끼워 맞추지 마라.
   · notes는 "모델의 해석"이다. 원문 사실로 단정하지 말 것.
+
+화자(speaker) 원칙:
+- 영상이 인터뷰·대담처럼 둘 이상의 화자가 번갈아 말하고, 질문↔답변 흐름이나 원문 단서(이름 호명, "내가 ~를 만들었다" 등)로 누가 말하는지 합리적으로 추정되면 각 transcript 문단의 speaker를 채운다.
+- 식별 가능한 실명이 있으면 실명, 아니면 '진행자'/'게스트' 또는 '화자 A'/'화자 B'로 일관되게 표기한다.
+- 독백(단일 화자)이거나 화자 구분이 불확실하면 speaker를 빈 문자열로 둔다. 추정이므로 확실하지 않으면 지어내지 마라.
 
 - 전문 용어는 자연스러운 한국어로 옮기되 필요하면 원어를 괄호로 병기한다.
 - originalTitle과 transcript의 original을 제외한 모든 출력은 한국어로 작성한다.`;
