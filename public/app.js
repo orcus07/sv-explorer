@@ -113,7 +113,8 @@ function show(item) {
   const hasVideo = !!item.videoId;
 
   $("r-source").textContent =
-    { caption: "자막", "auto-caption": "자동 자막", paste: "붙여넣기" }[item.via] || item.via || "";
+    { supadata: "자동 추출", caption: "자막", "auto-caption": "자동 자막", proxy: "자동(프록시)", paste: "붙여넣기" }[item.via] ||
+    item.via || "";
   $("r-title").textContent = item.koreanTitle || item.originalTitle || "(제목 없음)";
   $("r-original").textContent = item.originalTitle || "";
   $("r-meta").textContent = [item.channel, item.publishedDate, item.sourceLang && `원어: ${item.sourceLang}`]
@@ -204,15 +205,23 @@ function renderTranscript(item) {
     div.className = "tr-para";
     div.dataset.sec = p.seconds || 0;
     div.id = "t-" + (p.seconds || 0);
-    if (p.timestamp || p.seconds) {
+    if (p.timestamp || p.seconds || p.speaker) {
       const head = document.createElement("div");
       head.className = "tr-time";
-      const btn = document.createElement("button");
-      btn.className = "ts";
-      btn.textContent = p.timestamp || fmtTime(p.seconds);
-      btn.onclick = () => hasVideo && seekTo(p.seconds);
-      if (!hasVideo) btn.style.cursor = "default";
-      head.appendChild(btn);
+      if (p.timestamp || p.seconds) {
+        const btn = document.createElement("button");
+        btn.className = "ts";
+        btn.textContent = p.timestamp || fmtTime(p.seconds);
+        btn.onclick = () => hasVideo && seekTo(p.seconds);
+        if (!hasVideo) btn.style.cursor = "default";
+        head.appendChild(btn);
+      }
+      if (p.speaker) {
+        const sp = document.createElement("span");
+        sp.className = "tr-speaker";
+        sp.textContent = p.speaker;
+        head.appendChild(sp);
+      }
       div.appendChild(head);
     }
     const ko = document.createElement("p");

@@ -184,7 +184,8 @@ body {
 .transcript { display: flex; flex-direction: column; }
 .tr-para { padding: 12px 0; border-bottom: 1px solid var(--border); scroll-margin-top: calc(var(--topbar-h) + 12px); }
 .tr-para:target, .tr-para.flash { background: #fffbeb; }
-.tr-time { margin-bottom: 7px; }
+.tr-time { margin-bottom: 7px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tr-speaker { font-weight: 700; color: var(--accent); font-size: 13px; }
 .tr-ko { margin: 0; font-size: 16.5px; line-height: 1.85; }
 .tr-orig {
   margin: 8px 0 0; color: var(--muted); font-size: 14.5px; line-height: 1.7;
