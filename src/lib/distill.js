@@ -12,7 +12,7 @@ import Anthropic from "@anthropic-ai/sdk";
 
 const MODEL = "claude-opus-4-8";
 const OUTPUT_CAP = 128000; // Opus 4.8 최대 출력 토큰
-const SINGLE_PASS_BUDGET = 115000; // 이 추정치를 넘으면 분할 처리
+const SINGLE_PASS_BUDGET = 90000; // 예상 출력이 이 토큰 수를 넘으면 분할 처리(128K 한도 전 여유 확보)
 const CHUNK_CHARS = 120000; // 분할 시 청크당 원문 자막 문자 수
 
 let _client;
@@ -209,7 +209,14 @@ async function callJson({ schema, maxTokens, userText }) {
   const message = await stream.finalMessage();
   const block = message.content.find((b) => b.type === "text");
   if (!block) throw new Error("Claude 응답에서 결과를 찾지 못했습니다.");
-  return JSON.parse(block.text);
+  try {
+    return JSON.parse(block.text);
+  } catch {
+    if (message.stop_reason === "max_tokens") {
+      throw new Error("영상이 너무 길어 결과가 출력 한도를 넘어 잘렸습니다. 잠시 후 다시 시도해 주세요.");
+    }
+    throw new Error("결과 JSON 파싱에 실패했습니다. 다시 시도해 주세요.");
+  }
 }
 
 // ── 메인 ────────────────────────────────────────────────────────────────
@@ -238,7 +245,9 @@ export async function distill(source, meta = {}) {
         `- 실제 발화(음성) 자막 본문이 들어 있으면 그것을 문단 단위 한글·원문 병기 트랜스크립트로 충실히 정리하고, timestamp는 ""·seconds는 0으로 둬라.\n` +
         `- 실제 자막 본문이 없고 제목·설명·댓글·관련영상 같은 메타데이터뿐이면, transcript와 chapters는 반드시 빈 배열([])로 두고 변명·설명 문구를 거기에 넣지 마라. 그 경우 oneLiner·topic·keyTakeaways는 확보된 정보 범위에서 작성하되, 내용이 영상 설명 기반임을 topic 끝에 한 문장으로 밝혀라.\n\n---\n${transcriptText}`
       : `${hdr}\n\n아래는 유튜브 영상 자막이다. 각 줄 앞 [숫자]는 시작 시점(초)이다.\n위 원칙에 따라 구조 요약과 한글·원문 병기 트랜스크립트로 정리해줘.\n\n---\n${transcriptText}`;
-    return await callJson({ schema: FULL_SCHEMA, maxTokens: estTokens, userText });
+    // 출력 상한은 예상치가 아니라 넉넉하게(최대 128K) 준다 — 잘림 방지.
+    // (스트리밍이라 실제 사용 토큰만 과금/소요되며, 모델은 end_turn에서 자연 종료된다.)
+    return await callJson({ schema: FULL_SCHEMA, maxTokens: OUTPUT_CAP, userText });
   }
 
   // 자동 폴백: 구조 요약(1회) + 트랜스크립트(청크별)
@@ -254,7 +263,7 @@ export async function distill(source, meta = {}) {
     const chunkText = buildTimestampedText(chunks[i]);
     const part = await callJson({
       schema: TRANSCRIPT_SCHEMA,
-      maxTokens: estimateOutputTokens(chunkText.length),
+      maxTokens: OUTPUT_CAP,
       userText: `${hdr}\n\n아래는 긴 영상 자막의 ${i + 1}/${chunks.length} 구간이다. 각 줄 앞 [숫자]는 시작 시점(초)이다.\n이 구간을 문단 단위 한글·원문 병기 트랜스크립트로 충실히 정리해줘. (이 구간만, 요약 금지.)\n\n---\n${chunkText}`,
     });
     if (Array.isArray(part.transcript)) transcript.push(...part.transcript);
