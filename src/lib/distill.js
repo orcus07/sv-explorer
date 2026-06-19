@@ -12,8 +12,8 @@ import Anthropic from "@anthropic-ai/sdk";
 
 const MODEL = "claude-opus-4-8";
 const OUTPUT_CAP = 128000; // Opus 4.8 최대 출력 토큰
-const SINGLE_PASS_BUDGET = 115000; // 예상 출력이 이 토큰 수를 넘으면 분할(정상 길이 영상은 단일 처리)
-const CHUNK_CHARS = 120000; // 분할 시 청크당 원문 자막 문자 수
+const SINGLE_PASS_BUDGET = 24000; // 예상 출력이 이 토큰을 넘으면 분할(긴 영상은 작은 호출 여러 번)
+const CHUNK_CHARS = 16000; // 분할 시 청크당 원문 자막 문자 수(호출 하나를 작게 → 끊김 위험 최소화)
 
 let _client;
 function client() {
@@ -263,26 +263,51 @@ export async function distill(source, meta = {}) {
     return await callJson({ schema: FULL_SCHEMA, maxTokens: OUTPUT_CAP, userText });
   }
 
-  // 자동 폴백: 구조 요약(1회) + 트랜스크립트(청크별)
+  // 긴 영상: 구조 요약(1회) + 트랜스크립트(작은 청크별, 각 호출은 짧고 재시도 가능)
   const structure = await callJson({
     schema: STRUCTURE_SCHEMA,
     maxTokens: 16000,
-    userText: `${hdr}\n\n아래는 긴 유튜브 영상의 전체 자막이다. 각 줄 앞 [숫자]는 시작 시점(초)이다.\n구조 요약(제목·맥락·핵심 시사점·마케터 관점·타임스탬프 목차·핵심 용어)을 작성해줘. (본문 트랜스크립트는 별도로 처리하므로 여기서는 만들지 마라.)\n\n---\n${transcriptText}`,
+    userText: isRaw
+      ? `${hdr}\n\n아래는 유튜브 영상 페이지에서 자동 추출한 텍스트다(정밀 타임스탬프 없음). 실제 자막 본문이 있으면 구조 요약(제목·맥락·핵심 시사점·마케터 관점·타임스탬프 목차·핵심 용어)을 작성하고, 메타데이터뿐이면 chapters는 빈 배열로 둬라. (본문 트랜스크립트는 별도 처리하므로 여기선 만들지 마라.)\n\n---\n${transcriptText}`
+      : `${hdr}\n\n아래는 긴 유튜브 영상의 전체 자막이다. 각 줄 앞 [숫자]는 시작 시점(초)이다.\n구조 요약(제목·맥락·핵심 시사점·마케터 관점·타임스탬프 목차·핵심 용어)을 작성해줘. (본문 트랜스크립트는 별도로 처리하므로 여기서는 만들지 마라.)\n\n---\n${transcriptText}`,
   });
 
-  const chunks = chunkSegments(source.segments || [], CHUNK_CHARS);
+  // 트랜스크립트용 청크(작게): 자막은 세그먼트 묶음(타임스탬프 보존), 붙여넣기는 텍스트 분할.
+  const chunkTexts = source.segments
+    ? chunkSegments(source.segments, CHUNK_CHARS).map(buildTimestampedText)
+    : chunkRawText(transcriptText, CHUNK_CHARS);
+
   const transcript = [];
-  for (let i = 0; i < chunks.length; i++) {
-    const chunkText = buildTimestampedText(chunks[i]);
+  for (let i = 0; i < chunkTexts.length; i++) {
     const part = await callJson({
       schema: TRANSCRIPT_SCHEMA,
       maxTokens: OUTPUT_CAP,
-      userText: `${hdr}\n\n아래는 긴 영상 자막의 ${i + 1}/${chunks.length} 구간이다. 각 줄 앞 [숫자]는 시작 시점(초)이다.\n이 구간을 문단 단위 한글·원문 병기 트랜스크립트로 충실히 정리해줘. (이 구간만, 요약 금지.)\n\n---\n${chunkText}`,
+      userText: isRaw
+        ? `${hdr}\n\n아래는 긴 영상 텍스트의 ${i + 1}/${chunkTexts.length} 구간이다(정밀 타임스탬프 없음).\n이 구간을 문단 단위 한글·원문 병기 트랜스크립트로 충실히 정리해줘(timestamp는 ""·seconds는 0). 이 구간만, 요약 금지.\n\n---\n${chunkTexts[i]}`
+        : `${hdr}\n\n아래는 긴 영상 자막의 ${i + 1}/${chunkTexts.length} 구간이다. 각 줄 앞 [숫자]는 시작 시점(초)이다.\n이 구간을 문단 단위 한글·원문 병기 트랜스크립트로 충실히 정리해줘. (이 구간만, 요약 금지.)\n\n---\n${chunkTexts[i]}`,
     });
     if (Array.isArray(part.transcript)) transcript.push(...part.transcript);
   }
 
   return { ...structure, transcript };
+}
+
+/** 긴 원문 텍스트를 줄/공백 경계에서 maxChars 단위로 분할한다. */
+function chunkRawText(text, maxChars) {
+  const chunks = [];
+  let i = 0;
+  while (i < text.length) {
+    let end = Math.min(i + maxChars, text.length);
+    if (end < text.length) {
+      const nl = text.lastIndexOf("\n", end);
+      const sp = text.lastIndexOf(" ", end);
+      const cut = Math.max(nl, sp);
+      if (cut > i + maxChars * 0.5) end = cut;
+    }
+    chunks.push(text.slice(i, end).trim());
+    i = end;
+  }
+  return chunks.filter(Boolean);
 }
 
 /** 세그먼트를 원문 문자 수 기준으로 청크 분할한다. */
