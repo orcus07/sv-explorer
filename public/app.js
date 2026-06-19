@@ -259,17 +259,38 @@ async function run(endpoint, payload) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "처리 실패");
-    upsertArchive(data);
-    show(data);
-    setStatus("완료 · 보관함에 저장됨", false);
+    // 처리 중 heartbeat(빈 줄)가 흘러오는 NDJSON 스트림 — 끝까지 읽고 마지막 JSON 줄을 파싱.
+    if (!res.body) {
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || "처리 실패");
+      finishRun(data);
+      return;
+    }
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+    }
+    const lines = buf.split("\n").map((l) => l.trim()).filter(Boolean);
+    if (!lines.length) throw new Error("서버 응답이 비어 있습니다. 다시 시도해 주세요.");
+    const data = JSON.parse(lines[lines.length - 1]);
+    if (data.error) throw new Error(data.error);
+    finishRun(data);
   } catch (e) {
     setStatus("⚠️ " + e.message, false);
   } finally {
     $("run-btn").disabled = false;
     $("paste-run").disabled = false;
   }
+}
+
+function finishRun(data) {
+  upsertArchive(data);
+  show(data);
+  setStatus("완료 · 보관함에 저장됨", false);
 }
 function setStatus(msg, busy) {
   const el = $("status");
