@@ -12,8 +12,8 @@ import Anthropic from "@anthropic-ai/sdk";
 
 const MODEL = "claude-opus-4-8";
 const OUTPUT_CAP = 128000; // Opus 4.8 최대 출력 토큰
-const SINGLE_PASS_BUDGET = 90000; // 예상 출력이 이 토큰 수를 넘으면 분할 처리(128K 한도 전 여유 확보)
-const CHUNK_CHARS = 120000; // 분할 시 청크당 원문 자막 문자 수
+const SINGLE_PASS_BUDGET = 50000; // 예상 출력이 이 토큰 수를 넘으면 분할(호출당 작게 → 끊김 위험↓)
+const CHUNK_CHARS = 70000; // 분할 시 청크당 원문 자막 문자 수
 
 let _client;
 function client() {
@@ -96,15 +96,10 @@ const TRANSCRIPT_PROP = {
       properties: {
         timestamp: { type: "string", description: "이 문단 시작 시점 mm:ss(없으면 빈 문자열)" },
         seconds: { type: "integer", description: "문단 시작 시점(초). 모르면 0" },
-        speaker: {
-          type: "string",
-          description:
-            "이 문단을 말한 화자. 인터뷰·대담처럼 화자가 구분되고 대화 흐름·원문 단서로 누가 말하는지 합리적으로 추정될 때만 채운다. 원문에서 실명이 식별되면 실명, 아니면 '진행자'/'게스트' 또는 '화자 A'/'화자 B'. 독백이거나 화자 구분이 불확실하면 빈 문자열(지어내지 말 것).",
-        },
         original: { type: "string", description: "원문 그대로의 문단(원어)" },
         korean: { type: "string", description: "해당 문단의 한글 번역(맥락 손실 최소화)" },
       },
-      required: ["timestamp", "seconds", "speaker", "original", "korean"],
+      required: ["timestamp", "seconds", "original", "korean"],
       additionalProperties: false,
     },
   },
@@ -154,11 +149,6 @@ const SYSTEM = `너는 유튜브 영상의 자막을 한국어로 옮겨 정리�
   · 관련이 약하거나 없으면 relevance를 low/none으로 솔직히 표시하고, notes에 그 점을 밝힌다. 억지로 HBM/칩 수요 등에 끼워 맞추지 마라.
   · notes는 "모델의 해석"이다. 원문 사실로 단정하지 말 것.
 
-화자(speaker) 원칙:
-- 영상이 인터뷰·대담처럼 둘 이상의 화자가 번갈아 말하고, 질문↔답변 흐름이나 원문 단서(이름 호명, "내가 ~를 만들었다" 등)로 누가 말하는지 합리적으로 추정되면 각 transcript 문단의 speaker를 채운다.
-- 식별 가능한 실명이 있으면 실명, 아니면 '진행자'/'게스트' 또는 '화자 A'/'화자 B'로 일관되게 표기한다.
-- 독백(단일 화자)이거나 화자 구분이 불확실하면 speaker를 빈 문자열로 둔다. 추정이므로 확실하지 않으면 지어내지 마라.
-
 - 전문 용어는 자연스러운 한국어로 옮기되 필요하면 원어를 괄호로 병기한다.
 - originalTitle과 transcript의 original을 제외한 모든 출력은 한국어로 작성한다.`;
 
@@ -196,27 +186,50 @@ function header(meta) {
     .join("\n");
 }
 
-/** json_schema를 강제해 한 번 호출하고 파싱된 객체를 돌려준다(스트리밍). */
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// 네트워크 일시 끊김(스트림 조기 종료 등)은 재시도로 복구 가능한 부류.
+function isTransient(err) {
+  return /premature close|terminated|econnreset|fetch failed|socket|network|aborted|timeout|overloaded|529|500|502|503/i.test(
+    String(err?.message || err),
+  );
+}
+
+/** json_schema를 강제해 호출하고 파싱된 객체를 돌려준다(스트리밍 + 끊김 재시도). */
 async function callJson({ schema, maxTokens, userText }) {
-  const stream = client().messages.stream({
-    model: MODEL,
-    max_tokens: Math.min(OUTPUT_CAP, Math.max(16000, maxTokens)),
-    system: SYSTEM,
-    thinking: { type: "adaptive" },
-    output_config: { format: { type: "json_schema", schema } },
-    messages: [{ role: "user", content: userText }],
-  });
-  const message = await stream.finalMessage();
-  const block = message.content.find((b) => b.type === "text");
-  if (!block) throw new Error("Claude 응답에서 결과를 찾지 못했습니다.");
-  try {
-    return JSON.parse(block.text);
-  } catch {
-    if (message.stop_reason === "max_tokens") {
-      throw new Error("영상이 너무 길어 결과가 출력 한도를 넘어 잘렸습니다. 잠시 후 다시 시도해 주세요.");
+  let lastErr;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    let message;
+    try {
+      const stream = client().messages.stream({
+        model: MODEL,
+        max_tokens: Math.min(OUTPUT_CAP, Math.max(16000, maxTokens)),
+        system: SYSTEM,
+        thinking: { type: "adaptive" },
+        output_config: { format: { type: "json_schema", schema } },
+        messages: [{ role: "user", content: userText }],
+      });
+      message = await stream.finalMessage();
+    } catch (e) {
+      lastErr = e;
+      if (attempt < 3 && isTransient(e)) {
+        await sleep(1500 * attempt);
+        continue; // 끊겼으면 다시 호출
+      }
+      throw new Error("Claude 호출이 중간에 끊겼습니다(네트워크). 다시 시도해 주세요.");
     }
-    throw new Error("결과 JSON 파싱에 실패했습니다. 다시 시도해 주세요.");
+
+    const block = message.content.find((b) => b.type === "text");
+    if (!block) throw new Error("Claude 응답에서 결과를 찾지 못했습니다.");
+    try {
+      return JSON.parse(block.text);
+    } catch {
+      if (message.stop_reason === "max_tokens") {
+        throw new Error("영상이 너무 길어 결과가 출력 한도를 넘어 잘렸습니다. 잠시 후 다시 시도해 주세요.");
+      }
+      throw new Error("결과 JSON 파싱에 실패했습니다. 다시 시도해 주세요.");
+    }
   }
+  throw lastErr;
 }
 
 // ── 메인 ────────────────────────────────────────────────────────────────
