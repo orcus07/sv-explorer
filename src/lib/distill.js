@@ -12,8 +12,8 @@ import Anthropic from "@anthropic-ai/sdk";
 
 const MODEL = "claude-opus-4-8";
 const OUTPUT_CAP = 128000; // Opus 4.8 최대 출력 토큰
-const SINGLE_PASS_BUDGET = 50000; // 예상 출력이 이 토큰 수를 넘으면 분할(호출당 작게 → 끊김 위험↓)
-const CHUNK_CHARS = 70000; // 분할 시 청크당 원문 자막 문자 수
+const SINGLE_PASS_BUDGET = 115000; // 예상 출력이 이 토큰 수를 넘으면 분할(정상 길이 영상은 단일 처리)
+const CHUNK_CHARS = 120000; // 분할 시 청크당 원문 자막 문자 수
 
 let _client;
 function client() {
