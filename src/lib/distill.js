@@ -236,9 +236,10 @@ async function callJson({ schema, maxTokens, userText }) {
 /**
  * @param {{segments?: Array<{start:number,text:string}>, rawText?: string}} source
  * @param {{title?,channel?,publishedDate?,url?}} [meta]
+ * @param {(msg:string)=>void} [onProgress] - 진행 상황 콜백
  * @returns {Promise<object>} FULL_SCHEMA 형태의 결과
  */
-export async function distill(source, meta = {}) {
+export async function distill(source, meta = {}, onProgress = () => {}) {
   const transcriptText = source.segments
     ? buildTimestampedText(source.segments)
     : (source.rawText || "").trim();
@@ -251,8 +252,9 @@ export async function distill(source, meta = {}) {
   const estTokens = estimateOutputTokens(transcriptText.length);
   const isRaw = !source.segments;
 
-  // 단일 패스 (대부분의 영상)
+  // 단일 패스 (짧은 영상)
   if (estTokens <= SINGLE_PASS_BUDGET) {
+    onProgress("증류 중…");
     const userText = isRaw
       ? `${hdr}\n\n아래는 유튜브 영상 페이지에서 자동 추출한 텍스트다(리더 프록시 결과, 정밀 타임스탬프 없음).\n` +
         `- 실제 발화(음성) 자막 본문이 들어 있으면 그것을 문단 단위 한글·원문 병기 트랜스크립트로 충실히 정리하고, timestamp는 ""·seconds는 0으로 둬라.\n` +
@@ -264,6 +266,7 @@ export async function distill(source, meta = {}) {
   }
 
   // 긴 영상: 구조 요약(1회) + 트랜스크립트(작은 청크별, 각 호출은 짧고 재시도 가능)
+  onProgress("구조 요약 작성 중…");
   const structure = await callJson({
     schema: STRUCTURE_SCHEMA,
     maxTokens: 16000,
@@ -279,6 +282,7 @@ export async function distill(source, meta = {}) {
 
   const transcript = [];
   for (let i = 0; i < chunkTexts.length; i++) {
+    onProgress(`트랜스크립트 정리 중… (${i + 1}/${chunkTexts.length})`);
     const part = await callJson({
       schema: TRANSCRIPT_SCHEMA,
       maxTokens: OUTPUT_CAP,

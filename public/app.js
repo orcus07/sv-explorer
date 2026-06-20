@@ -249,41 +249,55 @@ function fillList(id, arr) {
 }
 
 // ── 요청 ────────────────────────────────────────────────────────────────
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 async function run(endpoint, payload) {
-  setStatus("증류 중… 영상이 길면 1~2분 걸릴 수 있어요.", true);
+  setStatus("시작하는 중…", true);
   $("run-btn").disabled = true;
   $("paste-run").disabled = true;
   try {
+    // 1) 작업 시작 → jobId 즉시 수신
     const res = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    // 처리 중 heartbeat(빈 줄)가 흘러오는 NDJSON 스트림 — 끝까지 읽고 마지막 JSON 줄을 파싱.
-    if (!res.body) {
-      const data = await res.json();
-      if (!res.ok || data.error) throw new Error(data.error || "처리 실패");
-      finishRun(data);
-      return;
-    }
-    const reader = res.body.getReader();
-    const dec = new TextDecoder();
-    let buf = "";
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += dec.decode(value, { stream: true });
-    }
-    const lines = buf.split("\n").map((l) => l.trim()).filter(Boolean);
-    if (!lines.length) throw new Error("서버 응답이 비어 있습니다. 다시 시도해 주세요.");
-    const data = JSON.parse(lines[lines.length - 1]);
-    if (data.error) throw new Error(data.error);
+    const start = await res.json();
+    if (!res.ok || start.error) throw new Error(start.error || "시작 실패");
+    // 2) 진행 상황 폴링 (각 요청은 짧아 타임아웃에 안 걸림)
+    const data = await pollJob(start.jobId);
     finishRun(data);
   } catch (e) {
     setStatus("⚠️ " + e.message, false);
   } finally {
     $("run-btn").disabled = false;
     $("paste-run").disabled = false;
+  }
+}
+
+async function pollJob(jobId) {
+  let misses = 0;
+  while (true) {
+    await sleep(2000);
+    let res;
+    try {
+      res = await fetch("/api/job/" + jobId, { cache: "no-store" });
+    } catch {
+      if (++misses > 20) throw new Error("네트워크가 불안정합니다. 다시 시도해 주세요.");
+      continue; // 일시적 네트워크 — 계속 폴링
+    }
+    misses = 0;
+    if (res.status === 404) {
+      const e = await res.json().catch(() => ({}));
+      throw new Error(e.error || "작업을 찾을 수 없습니다. 다시 시도해 주세요.");
+    }
+    const j = await res.json();
+    if (j.status === "running") {
+      setStatus("⏳ " + (j.progress || "처리 중…"), true);
+      continue;
+    }
+    if (j.status === "error") throw new Error(j.error || "처리 실패");
+    if (j.status === "done") return j.result;
   }
 }
 
