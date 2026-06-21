@@ -15,6 +15,7 @@ const OUTPUT_CAP = 128000; // Opus 4.8 최대 출력 토큰
 const SINGLE_PASS_BUDGET = 24000; // 예상 출력이 이 토큰을 넘으면 분할(긴 영상은 작은 호출 여러 번)
 const CHUNK_CHARS = 8000; // 분할 시 청크당 원문 자막 문자 수(호출 하나를 작게 → 끊김 위험 최소화)
 const MAX_ATTEMPTS = 5; // callJson 한 호출당 끊김 재시도 횟수
+const STRUCTURE_INPUT_CAP = 40000; // 구조 요약 호출에 넣을 입력 상한(초장편은 대표 발췌로 축소)
 
 let _client;
 function client() {
@@ -181,6 +182,20 @@ function estimateOutputTokens(chars) {
   return Math.ceil(chars * 0.7) + 4000;
 }
 
+/**
+ * 긴 타임스탬프 텍스트를 maxChars 안으로 "고르게" 축소한다(구조 요약 입력용).
+ * 줄을 일정 간격으로 솎아 영상 전체 시점([초] 앵커)이 골고루 남게 한다.
+ */
+function downsample(text, maxChars) {
+  if (text.length <= maxChars) return text;
+  const lines = text.split("\n");
+  const step = Math.max(2, Math.ceil(text.length / maxChars));
+  const kept = lines.filter((_, i) => i % step === 0);
+  let out = kept.join("\n");
+  if (out.length > maxChars) out = out.slice(0, maxChars); // 안전 하드캡
+  return out;
+}
+
 function header(meta) {
   return [
     meta.title && `영상 제목: ${meta.title}`,
@@ -272,13 +287,20 @@ export async function distill(source, meta = {}, onProgress = () => {}) {
   }
 
   // 긴 영상: 구조 요약(1회) + 트랜스크립트(작은 청크별, 각 호출은 짧고 재시도 가능)
+  // 구조 요약 호출에는 전체 자막을 통째로 넣지 않는다 — 초장편은 입력이 수십만 자라
+  // 그 한 호출이 길어져 끊긴다. 영상 전체에서 고르게 뽑은 대표 발췌만 보낸다(타임스탬프 앵커는
+  // 전 구간에 퍼져 있어 챕터 시점은 그대로 나온다). 본문 트랜스크립트는 아래에서 전체를 충실히 처리.
   onProgress("구조 요약 작성 중…");
+  const structureText = downsample(transcriptText, STRUCTURE_INPUT_CAP);
+  const sampledNote = structureText.length < transcriptText.length
+    ? "\n(주의: 아래는 긴 영상이라 전체에서 고르게 뽑은 대표 발췌다. 타임스탬프는 전 구간에 퍼져 있으니 목차는 영상 흐름을 대표하도록 작성하고, 발췌 사이 공백을 걱정하지 마라.)"
+    : "";
   const structure = await callJson({
     schema: STRUCTURE_SCHEMA,
     maxTokens: 16000,
     userText: isRaw
-      ? `${hdr}\n\n아래는 유튜브 영상 페이지에서 자동 추출한 텍스트다(정밀 타임스탬프 없음). 실제 자막 본문이 있으면 구조 요약(제목·맥락·핵심 시사점·마케터 관점·타임스탬프 목차·핵심 용어)을 작성하고, 메타데이터뿐이면 chapters는 빈 배열로 둬라. (본문 트랜스크립트는 별도 처리하므로 여기선 만들지 마라.)\n\n---\n${transcriptText}`
-      : `${hdr}\n\n아래는 긴 유튜브 영상의 전체 자막이다. 각 줄 앞 [숫자]는 시작 시점(초)이다.\n구조 요약(제목·맥락·핵심 시사점·마케터 관점·타임스탬프 목차·핵심 용어)을 작성해줘. (본문 트랜스크립트는 별도로 처리하므로 여기서는 만들지 마라.)\n\n---\n${transcriptText}`,
+      ? `${hdr}\n\n아래는 유튜브 영상 페이지에서 자동 추출한 텍스트다(정밀 타임스탬프 없음).${sampledNote} 실제 자막 본문이 있으면 구조 요약(제목·맥락·핵심 시사점·마케터 관점·타임스탬프 목차·핵심 용어)을 작성하고, 메타데이터뿐이면 chapters는 빈 배열로 둬라. (본문 트랜스크립트는 별도 처리하므로 여기선 만들지 마라.)\n\n---\n${structureText}`
+      : `${hdr}\n\n아래는 긴 유튜브 영상의 자막이다. 각 줄 앞 [숫자]는 시작 시점(초)이다.${sampledNote}\n구조 요약(제목·맥락·핵심 시사점·마케터 관점·타임스탬프 목차·핵심 용어)을 작성해줘. (본문 트랜스크립트는 별도로 처리하므로 여기서는 만들지 마라.)\n\n---\n${structureText}`,
   });
 
   // 트랜스크립트용 청크(작게): 자막은 세그먼트 묶음(타임스탬프 보존), 붙여넣기는 텍스트 분할.
