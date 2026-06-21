@@ -13,14 +13,20 @@ import Anthropic from "@anthropic-ai/sdk";
 const MODEL = "claude-opus-4-8";
 const OUTPUT_CAP = 128000; // Opus 4.8 최대 출력 토큰
 const SINGLE_PASS_BUDGET = 24000; // 예상 출력이 이 토큰을 넘으면 분할(긴 영상은 작은 호출 여러 번)
-const CHUNK_CHARS = 16000; // 분할 시 청크당 원문 자막 문자 수(호출 하나를 작게 → 끊김 위험 최소화)
+const CHUNK_CHARS = 8000; // 분할 시 청크당 원문 자막 문자 수(호출 하나를 작게 → 끊김 위험 최소화)
+const MAX_ATTEMPTS = 5; // callJson 한 호출당 끊김 재시도 횟수
 
 let _client;
 function client() {
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new Error("ANTHROPIC_API_KEY 가 설정되지 않았습니다. .env 파일을 확인해주세요.");
   }
-  return (_client ??= new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }));
+  // 긴 스트리밍 호출이 SDK 자체 타임아웃에 걸려 끊기지 않도록 넉넉히(10분) 준다.
+  return (_client ??= new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY,
+    timeout: 600000,
+    maxRetries: 4,
+  }));
 }
 
 // ── 스키마 조각 ───────────────────────────────────────────────────────────
@@ -197,7 +203,7 @@ function isTransient(err) {
 /** json_schema를 강제해 호출하고 파싱된 객체를 돌려준다(스트리밍 + 끊김 재시도). */
 async function callJson({ schema, maxTokens, userText }) {
   let lastErr;
-  for (let attempt = 1; attempt <= 3; attempt++) {
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     let message;
     try {
       const stream = client().messages.stream({
@@ -211,8 +217,8 @@ async function callJson({ schema, maxTokens, userText }) {
       message = await stream.finalMessage();
     } catch (e) {
       lastErr = e;
-      if (attempt < 3 && isTransient(e)) {
-        await sleep(1500 * attempt);
+      if (attempt < MAX_ATTEMPTS && isTransient(e)) {
+        await sleep(1500 * attempt); // 1.5s → 3 → 4.5 → 6s 백오프
         continue; // 끊겼으면 다시 호출
       }
       throw new Error("Claude 호출이 중간에 끊겼습니다(네트워크). 다시 시도해 주세요.");
@@ -276,24 +282,49 @@ export async function distill(source, meta = {}, onProgress = () => {}) {
   });
 
   // 트랜스크립트용 청크(작게): 자막은 세그먼트 묶음(타임스탬프 보존), 붙여넣기는 텍스트 분할.
-  const chunkTexts = source.segments
-    ? chunkSegments(source.segments, CHUNK_CHARS).map(buildTimestampedText)
-    : chunkRawText(transcriptText, CHUNK_CHARS);
+  // 각 청크는 { text, startSec } — 실패 시 빈자리 표시에 시작 시점을 쓴다.
+  const chunks = source.segments
+    ? chunkSegments(source.segments, CHUNK_CHARS).map((segs) => ({
+        text: buildTimestampedText(segs),
+        startSec: segs.length ? Math.floor(segs[0].start) : 0,
+      }))
+    : chunkRawText(transcriptText, CHUNK_CHARS).map((text) => ({ text, startSec: 0 }));
 
   const transcript = [];
-  for (let i = 0; i < chunkTexts.length; i++) {
-    onProgress(`트랜스크립트 정리 중… (${i + 1}/${chunkTexts.length})`);
-    const part = await callJson({
-      schema: TRANSCRIPT_SCHEMA,
-      maxTokens: OUTPUT_CAP,
-      userText: isRaw
-        ? `${hdr}\n\n아래는 긴 영상 텍스트의 ${i + 1}/${chunkTexts.length} 구간이다(정밀 타임스탬프 없음).\n이 구간을 문단 단위 한글·원문 병기 트랜스크립트로 충실히 정리해줘(timestamp는 ""·seconds는 0). 이 구간만, 요약 금지.\n\n---\n${chunkTexts[i]}`
-        : `${hdr}\n\n아래는 긴 영상 자막의 ${i + 1}/${chunkTexts.length} 구간이다. 각 줄 앞 [숫자]는 시작 시점(초)이다.\n이 구간을 문단 단위 한글·원문 병기 트랜스크립트로 충실히 정리해줘. (이 구간만, 요약 금지.)\n\n---\n${chunkTexts[i]}`,
-    });
-    if (Array.isArray(part.transcript)) transcript.push(...part.transcript);
+  let gaps = 0;
+  for (let i = 0; i < chunks.length; i++) {
+    onProgress(`트랜스크립트 정리 중… (${i + 1}/${chunks.length})`);
+    try {
+      const part = await callJson({
+        schema: TRANSCRIPT_SCHEMA,
+        maxTokens: OUTPUT_CAP,
+        userText: isRaw
+          ? `${hdr}\n\n아래는 긴 영상 텍스트의 ${i + 1}/${chunks.length} 구간이다(정밀 타임스탬프 없음).\n이 구간을 문단 단위 한글·원문 병기 트랜스크립트로 충실히 정리해줘(timestamp는 ""·seconds는 0). 이 구간만, 요약 금지.\n\n---\n${chunks[i].text}`
+          : `${hdr}\n\n아래는 긴 영상 자막의 ${i + 1}/${chunks.length} 구간이다. 각 줄 앞 [숫자]는 시작 시점(초)이다.\n이 구간을 문단 단위 한글·원문 병기 트랜스크립트로 충실히 정리해줘. (이 구간만, 요약 금지.)\n\n---\n${chunks[i].text}`,
+      });
+      if (Array.isArray(part.transcript)) transcript.push(...part.transcript);
+    } catch (err) {
+      // 한 구간이 끝내 실패해도 전체를 버리지 않는다 — 그 구간만 빈자리로 표시하고 계속.
+      gaps++;
+      const sec = chunks[i].startSec;
+      transcript.push({
+        timestamp: sec ? fmtTimestamp(sec) : "",
+        seconds: sec,
+        original: "",
+        korean: `⚠️ (이 구간 ${i + 1}/${chunks.length}은 네트워크 문제로 가져오지 못했어요. 잠시 후 다시 시도하면 채워집니다.)`,
+      });
+    }
   }
 
-  return { ...structure, transcript };
+  return { ...structure, transcript, partial: gaps > 0, gaps, parts: chunks.length };
+}
+
+/** 초 → mm:ss / h:mm:ss */
+function fmtTimestamp(sec) {
+  sec = Math.max(0, Math.floor(sec || 0));
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+  const mm = String(m).padStart(h ? 2 : 1, "0"), ss = String(s).padStart(2, "0");
+  return h ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 }
 
 /** 긴 원문 텍스트를 줄/공백 경계에서 maxChars 단위로 분할한다. */

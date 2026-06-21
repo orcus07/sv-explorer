@@ -43,7 +43,12 @@ function finishJob(id, result) {
 }
 function failJob(id, msg) {
   const j = jobs.get(id);
-  if (j) { j.status = "error"; j.error = msg; j.ts = Date.now(); }
+  if (j) {
+    // 어느 단계에서 멈췄는지 함께 남겨, 실패 시 원인 파악이 쉽도록 한다.
+    j.status = "error";
+    j.error = j.progress && j.progress !== "시작하는 중…" ? `[${j.progress}] ${msg}` : msg;
+    j.ts = Date.now();
+  }
 }
 // 오래된 작업 정리
 setInterval(() => {
