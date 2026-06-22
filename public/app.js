@@ -258,56 +258,64 @@ function fillList(id, arr) {
   }
 }
 
-// ── 요청 ────────────────────────────────────────────────────────────────
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// ── API 키 (브라우저에만 저장; 서버로 보내지 않음) ───────────────────────
+const KEY_STORE = "yt-distill-anthropic-key";
+function getApiKey() { return (localStorage.getItem(KEY_STORE) || "").trim(); }
+function setApiKey(k) { localStorage.setItem(KEY_STORE, (k || "").trim()); refreshKeyUI(); }
+function refreshKeyUI() {
+  const has = !!getApiKey();
+  const w = $("key-warning");
+  if (w) {
+    w.textContent = has ? "" :
+      "⚠️ Anthropic API 키가 필요합니다. 왼쪽 ☰ 를 열어 키를 넣어주세요 (브라우저에만 저장돼요).";
+    w.classList.toggle("hidden", has);
+  }
+  const f = $("api-key");
+  if (f && document.activeElement !== f) f.value = getApiKey();
+  const st = $("key-state");
+  if (st) st.textContent = has ? "✅ 키 저장됨 (이 브라우저)" : "키가 아직 없습니다";
+}
 
-async function run(endpoint, payload) {
+// ── 요청: 서버는 자막만, Claude 호출은 브라우저가 직접 ────────────────────
+async function run(kind, payload) {
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    openDrawer();
+    setTimeout(() => $("api-key") && $("api-key").focus(), 250);
+    return setStatus("⚠️ 먼저 Anthropic API 키를 넣어줘 (왼쪽 ☰)", false);
+  }
   setStatus("시작하는 중…", true);
   $("run-btn").disabled = true;
   $("paste-run").disabled = true;
   try {
-    // 1) 작업 시작 → jobId 즉시 수신
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const start = await res.json();
-    if (!res.ok || start.error) throw new Error(start.error || "시작 실패");
-    // 2) 진행 상황 폴링 (각 요청은 짧아 타임아웃에 안 걸림)
-    const data = await pollJob(start.jobId);
-    finishRun(data);
+    let source, meta, videoId = null, via = "paste";
+    if (kind === "url") {
+      setStatus("⏳ 자막 가져오는 중…", true);
+      const res = await fetch("/api/transcript", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: payload.url }),
+      });
+      const t = await res.json();
+      if (!res.ok || t.error) throw new Error(t.error || "자막을 가져오지 못했습니다.");
+      source = t.segments ? { segments: t.segments } : { rawText: t.rawText };
+      meta = { title: t.title, channel: t.channel, publishedDate: t.publishedDate, url: payload.url };
+      videoId = t.videoId;
+      via = t.via;
+    } else {
+      source = { rawText: payload.text };
+      meta = { title: payload.title, url: payload.url };
+      videoId = payload.url ? YTDistill.parseVideoId(payload.url) : null;
+      via = "paste";
+    }
+    // 무거운 Claude 호출은 브라우저가 본인 키로 직접 (Render→Anthropic 끊김 우회)
+    const result = await YTDistill.distill(source, meta, apiKey, (m) => setStatus("⏳ " + m, true));
+    finishRun({ videoId, url: meta.url || "", via, ...result });
   } catch (e) {
     setStatus("⚠️ " + e.message, false);
   } finally {
     $("run-btn").disabled = false;
     $("paste-run").disabled = false;
-  }
-}
-
-async function pollJob(jobId) {
-  let misses = 0;
-  while (true) {
-    await sleep(2000);
-    let res;
-    try {
-      res = await fetch("/api/job/" + jobId, { cache: "no-store" });
-    } catch {
-      if (++misses > 20) throw new Error("네트워크가 불안정합니다. 다시 시도해 주세요.");
-      continue; // 일시적 네트워크 — 계속 폴링
-    }
-    misses = 0;
-    if (res.status === 404) {
-      const e = await res.json().catch(() => ({}));
-      throw new Error(e.error || "작업을 찾을 수 없습니다. 다시 시도해 주세요.");
-    }
-    const j = await res.json();
-    if (j.status === "running") {
-      setStatus("⏳ " + (j.progress || "처리 중…"), true);
-      continue;
-    }
-    if (j.status === "error") throw new Error(j.error || "처리 실패");
-    if (j.status === "done") return j.result;
   }
 }
 
@@ -331,7 +339,7 @@ $("url-form").addEventListener("submit", (e) => {
   e.preventDefault();
   const url = $("url").value.trim();
   if (!url) return setStatus("⚠️ 링크를 입력해주세요.", false);
-  run("/api/digest", { url });
+  run("url", { url });
 });
 $("menu-btn").onclick = openDrawer;
 $("drawer-close").onclick = closeDrawer;
@@ -340,11 +348,22 @@ $("toggle-paste").onclick = () => $("paste-box").classList.toggle("hidden");
 $("paste-run").onclick = () => {
   const text = $("paste-text").value.trim();
   if (text.length < 100) return setStatus("⚠️ 자막 텍스트가 너무 짧습니다.", false);
-  run("/api/digest-text", {
+  run("paste", {
     text,
     title: $("paste-title").value.trim(),
     url: $("paste-url").value.trim(),
   });
+};
+
+// API 키 저장/삭제
+$("key-save").onclick = () => {
+  setApiKey($("api-key").value);
+  setStatus(getApiKey() ? "✅ API 키를 저장했어요." : "키를 비웠어요.", false);
+};
+$("key-clear").onclick = () => {
+  $("api-key").value = "";
+  setApiKey("");
+  setStatus("API 키를 삭제했어요.", false);
 };
 $("search").addEventListener("input", renderList);
 $("show-original").addEventListener("change", () => current && renderTranscript(current));
@@ -359,15 +378,5 @@ $("delete-btn").onclick = () => {
 };
 
 // ── 초기화 ──────────────────────────────────────────────────────────────
-fetch("/api/health")
-  .then((r) => r.json())
-  .then((h) => {
-    if (!h.anthropic) {
-      const w = $("key-warning");
-      w.textContent = "⚠️ 서버에 ANTHROPIC_API_KEY 가 설정되지 않았습니다. .env 를 확인하세요.";
-      w.classList.remove("hidden");
-    }
-  })
-  .catch(() => {});
-
+refreshKeyUI();
 renderList();

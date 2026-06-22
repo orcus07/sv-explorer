@@ -7,16 +7,23 @@
 ## 어떻게 동작하나
 
 ```
-유튜브 링크 → 자막 수집(자동 추출 → 붙여넣기 폴백) → Claude 증류 → 구조 요약 + 병기 트랜스크립트 + 보관함
+유튜브 링크 → (서버) 자막 수집 → (브라우저가 본인 키로 직접) Claude 증류 → 구조 요약 + 병기 트랜스크립트 + 보관함
 ```
+
+**아키텍처 — 서버는 자막만, 무거운 호출은 브라우저가 직접:**
+- **서버(Render)**: 자막 수집만 담당 (작고 빠름).
+- **브라우저**: 무거운 Claude 호출을 사용자 **본인 API 키로 api.anthropic.com 에 직접** 보냄.
+  - Render(무료) → Anthropic 연결이 길거나 동시 다발이면 `premature close`로 끊기던 문제를 **근본 우회**.
+  - 키는 **브라우저(localStorage)에만** 저장되고 서버로 가지 않음. Anthropic이 공식 허용하는
+    브라우저 직접 호출(`anthropic-dangerous-direct-browser-access`)을 사용.
 
 **자막 수집 전략:**
 1. 링크만 붙이면 영상의 자막 트랙을 자동 추출 (타임스탬프 보존)
 2. 자막이 없거나 차단되면 → 화면에서 **자막 직접 붙여넣기**로 우회
 
-**처리 전략 (단일 패스 + 자동 폴백):**
-- 대부분의 영상(~3시간)은 **한 번의 호출로 전체를 스트리밍 처리** (Opus 4.8 최대 출력 128K 토큰)
-- 출력이 한도를 넘을 초장편만 자동으로 **구조 요약(1회) + 트랜스크립트(청크별)** 로 분할해 잘림 방지
+**처리 전략 (단일 패스 + 자동 분할):**
+- 짧은 영상은 **한 번의 호출**로 전체 정리
+- 긴 영상은 **구조 요약(1회) + 트랜스크립트(작은 청크 병렬)** 로 분할 — 끊김·잘림 방지, 시간 단축
 
 **결과물** (반도체 마케터 · AI 동향 관점):
 - 한 줄 핵심 (증류) · 이 영상의 주제·맥락
@@ -26,26 +33,28 @@
 - 핵심 용어·숫자 풀이
 - → 보관함에 저장되고 검색 가능
 
-요약·번역 엔진: **Claude `claude-opus-4-8`**
+요약·번역 엔진: **Claude `claude-haiku-4-5`** (MVP는 가장 저렴한 모델, thinking 끔) — 브라우저가 직접 호출
 
 ## 준비물
 
 1. **Node.js 20 이상** — https://nodejs.org
-2. **API 키 1개**: `ANTHROPIC_API_KEY` — https://console.anthropic.com
+2. **Anthropic API 키** — https://console.anthropic.com (서버가 아니라 **웹 화면 ☰ 에서** 입력, 브라우저에만 저장)
+3. (추천) **Supadata 키** — 링크 자동 자막 추출 안정화 (`SUPADATA_API_KEY`, 서버 환경변수)
 
 ## 실행 방법
 
 ```bash
 npm install
-cp .env.example .env      # ANTHROPIC_API_KEY 입력
-npm start                 # http://localhost:3000
+cp .env.example .env      # (선택) SUPADATA_API_KEY 등 자막 키만 입력
+npm start                 # http://localhost:3000  → 화면 ☰ 에서 Anthropic 키 입력
 ```
 
 ## 클라우드 배포 (폰·PC 어디서나 쓰기)
 
 노트북을 켜둘 필요 없이 항상 떠 있는 주소를 만들려면 → [`DEPLOY.md`](DEPLOY.md) (Render 무료 배포, 클릭 위주 안내).
-[`render.yaml`](render.yaml) 블루프린트가 포함되어 있어 저장소만 연결하면 서비스가 자동 생성되며,
-API 키는 Render 대시보드의 환경변수(`ANTHROPIC_API_KEY`)에 직접 입력합니다.
+[`render.yaml`](render.yaml) 블루프린트가 포함되어 있어 저장소만 연결하면 서비스가 자동 생성됩니다.
+서버에는 **자막 키(`SUPADATA_API_KEY`)만** 넣으면 되고, **Anthropic 키는 각 사용자가 웹 화면 ☰ 에서**
+본인 키를 입력합니다(브라우저에만 저장).
 
 ## 사용법
 
@@ -57,11 +66,14 @@ API 키는 Render 대시보드의 환경변수(`ANTHROPIC_API_KEY`)에 직접 �
 ## 파일 구성
 
 ```
-src/server.js               서버 (링크 → 수집 → 증류)
-src/lib/fetchTranscript.js  자막 수집 (자동 추출: ytInitialPlayerResponse → timedtext)
-src/lib/distill.js          Claude 증류 (구조 요약 + 한글·원문 병기, 단일패스/자동분할)
-public/                     화면(UI) + 임베드 플레이어 + 보관함
+src/server.js               서버 (링크 → 자막 수집만)
+src/lib/fetchTranscript.js  자막 수집 (Supadata 등)
+public/distill.js           브라우저 증류 (본인 키로 Claude 직접 호출, 구조 요약 + 병기 트랜스크립트)
+public/app.js               화면 로직 + API 키 관리(localStorage) + 보관함
+public/                     화면(UI) + 임베드 플레이어
 ```
+
+> 참고: 옛 서버측 `src/lib/distill.js`는 브라우저 직접 호출(`public/distill.js`)로 대체되었습니다.
 
 ## 참고 / 한계
 

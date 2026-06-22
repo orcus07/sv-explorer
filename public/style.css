@@ -98,6 +98,20 @@ body {
   background: rgba(0,0,0,.35); border: none;
 }
 
+/* API 키 박스 */
+.key-box { display: flex; flex-direction: column; gap: 7px; margin-bottom: 6px; }
+.key-box label { font-size: 14px; }
+.key-box #api-key {
+  width: 100%; padding: 9px 12px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--surface-2); color: var(--text); font: inherit;
+}
+.key-box #api-key:focus { outline: none; border-color: var(--link); }
+.key-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.small-btn { padding: 6px 12px; font-size: 13px; }
+.key-note { line-height: 1.5; margin: 2px 0 0; }
+.key-note a { color: var(--link); }
+.drawer-sep { width: 100%; border: none; border-top: 1px solid var(--border); margin: 12px 0; }
+
 /* ── 본문 ──────────────────────────────────────────── */
 .page { max-width: var(--maxw); margin: 0 auto; padding: 18px 20px 60px; }
 

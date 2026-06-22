@@ -24,6 +24,23 @@
       <strong>📚 보관함</strong>
       <button id="drawer-close" class="icon-btn" aria-label="닫기">×</button>
     </div>
+
+    <!-- API 키 (브라우저에만 저장) -->
+    <div class="key-box">
+      <label for="api-key"><strong>🔑 Anthropic API 키</strong></label>
+      <input id="api-key" type="password" autocomplete="off" placeholder="sk-ant-..." />
+      <div class="key-actions">
+        <button id="key-save" class="btn btn-primary small-btn">저장</button>
+        <button id="key-clear" class="btn small-btn">삭제</button>
+        <span id="key-state" class="muted small"></span>
+      </div>
+      <p class="muted small key-note">
+        Claude 호출은 이 브라우저가 <b>네 키로 직접</b> 보내. 키는 <b>이 브라우저에만</b> 저장되고
+        우리 서버로는 안 가. (<a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">키 발급 ↗</a>)
+      </p>
+    </div>
+
+    <hr class="drawer-sep" />
     <input id="search" type="search" placeholder="본 영상 검색…" />
     <ul id="list" class="list"></ul>
     <p id="empty-list" class="muted">아직 정리한 영상이 없습니다.</p>
@@ -113,6 +130,7 @@
     </article>
   </main>
 
+  <script src="distill.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
