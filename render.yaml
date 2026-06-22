@@ -9,9 +9,8 @@ services:
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:
-      # API 키는 보안상 여기 적지 않고, Render 대시보드에서 직접 입력한다(sync: false).
-      - key: ANTHROPIC_API_KEY
-        sync: false
+      # Anthropic 키는 더 이상 서버에 두지 않는다 — Claude 호출은 사용자 브라우저가
+      # 본인 키로 직접 하므로(Render→Anthropic 끊김 우회), 서버에는 자막 키만 둔다.
       # (추천) 자막 추출 전문 API 키 — 링크 자동 추출 안정화. 대시보드에서 입력.
       - key: SUPADATA_API_KEY
         sync: false
