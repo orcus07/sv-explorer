@@ -1,11 +1,11 @@
 // 유튜브 자막을 받아 구조 요약 + 한글·원문 병기 트랜스크립트로 증류한다.
-// (Claude Haiku 4.5 — MVP는 가장 저렴한 모델로. 구조화 JSON 강제 출력, 스트리밍)
+// (Claude Haiku 4.5 — MVP는 가장 저렴한 모델로. 구조화 JSON 강제 출력, non-streaming)
 //
 // 비용: Haiku 4.5는 입력 $1·출력 $5/1M 토큰으로 Opus(입력 $5·출력 $25)보다 5배 저렴.
 // 번역·정리 작업이라 thinking(사고 토큰=출력 과금)도 꺼서 추가로 절감한다.
 //
 // 처리 전략 (②: 단일 패스 + 자동 폴백):
-//  - 대부분 영상은 단일 호출로 전체를 한 번에 (스트리밍).
+//  - 대부분 영상은 단일 호출로 전체를 한 번에.
 //  - 출력이 한도를 넘을 것으로 추정되는 초장편만 자동으로
 //    "구조 요약(1회) + 트랜스크립트(청크별)"로 분할 처리해 잘림을 방지한다.
 //
@@ -14,19 +14,19 @@
 import Anthropic from "@anthropic-ai/sdk";
 
 const MODEL = "claude-haiku-4-5";
-const OUTPUT_CAP = 64000; // Haiku 4.5 최대 출력 토큰
-const SINGLE_PASS_BUDGET = 24000; // 예상 출력이 이 토큰을 넘으면 분할(긴 영상은 작은 호출 여러 번)
-const CHUNK_CHARS = 8000; // 분할 시 청크당 원문 자막 문자 수(호출 하나를 작게 → 끊김 위험 최소화)
+const NONSTREAM_MAX = 16000; // non-streaming 호출의 max_tokens 안전 상한(이 이상은 HTTP 타임아웃 위험)
+const SINGLE_PASS_BUDGET = 14000; // 예상 출력이 이 토큰을 넘으면 분할(단일 패스 출력이 16K 안에 들도록)
+const CHUNK_CHARS = 8000; // 분할 시 청크당 원문 자막 문자 수(호출 하나를 작게 → 출력 16K 미만)
 const MAX_ATTEMPTS = 5; // callJson 한 호출당 끊김 재시도 횟수
 const STRUCTURE_INPUT_CAP = 40000; // 구조 요약 호출에 넣을 입력 상한(초장편은 대표 발췌로 축소)
-const CONCURRENCY = 3; // 트랜스크립트 청크 동시 처리 개수(시간 단축, 레이트리밋 여유)
+const CONCURRENCY = 3; // 트랜스크립트 청크 동시 처리 개수(짧은 non-streaming 호출이라 부담 적음)
 
 let _client;
 function client() {
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new Error("ANTHROPIC_API_KEY 가 설정되지 않았습니다. .env 파일을 확인해주세요.");
   }
-  // 긴 스트리밍 호출이 SDK 자체 타임아웃에 걸려 끊기지 않도록 넉넉히(10분) 준다.
+  // 긴 호출이 SDK 자체 타임아웃에 걸려 끊기지 않도록 넉넉히(10분) 준다.
   return (_client ??= new Anthropic({
     apiKey: process.env.ANTHROPIC_API_KEY,
     timeout: 600000,
@@ -232,22 +232,24 @@ function describeErr(e) {
   return parts.join(" · ").slice(0, 300) || "알 수 없는 오류";
 }
 
-/** json_schema를 강제해 호출하고 파싱된 객체를 돌려준다(스트리밍 + 끊김 재시도). */
+/** json_schema를 강제해 호출하고 파싱된 객체를 돌려준다(non-streaming + 끊김 재시도).
+ *  스트리밍(긴 SSE 연결)은 Render 무료 IP에서 'premature close'로 자주 끊겨,
+ *  호출이 작아진 지금은 일반 요청을 쓴다. 연결 끊김은 SDK가 자동 재시도하고,
+ *  여기서도 한 번 더 감싸 재시도한다. max_tokens는 non-streaming 안전선(16K)으로 제한. */
 async function callJson({ schema, maxTokens, userText }) {
   let lastErr;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     let message;
     try {
-      const stream = client().messages.stream({
+      message = await client().messages.create({
         model: MODEL,
-        max_tokens: Math.min(OUTPUT_CAP, Math.max(16000, maxTokens)),
+        max_tokens: Math.min(NONSTREAM_MAX, Math.max(4000, maxTokens)),
         system: SYSTEM,
         // 번역·정리 작업이라 thinking은 끈다(출력으로 과금되는 사고 토큰 절감).
         thinking: { type: "disabled" },
         output_config: { format: { type: "json_schema", schema } },
         messages: [{ role: "user", content: userText }],
       });
-      message = await stream.finalMessage();
     } catch (e) {
       lastErr = e;
       // 진짜 원인을 서버 로그에 남긴다(Render 로그에서 확인 가능).
@@ -302,9 +304,8 @@ export async function distill(source, meta = {}, onProgress = () => {}) {
         `- 실제 발화(음성) 자막 본문이 들어 있으면 그것을 문단 단위 한글·원문 병기 트랜스크립트로 충실히 정리하고, timestamp는 ""·seconds는 0으로 둬라.\n` +
         `- 실제 자막 본문이 없고 제목·설명·댓글·관련영상 같은 메타데이터뿐이면, transcript와 chapters는 반드시 빈 배열([])로 두고 변명·설명 문구를 거기에 넣지 마라. 그 경우 oneLiner·topic·keyTakeaways는 확보된 정보 범위에서 작성하되, 내용이 영상 설명 기반임을 topic 끝에 한 문장으로 밝혀라.\n\n---\n${transcriptText}`
       : `${hdr}\n\n아래는 유튜브 영상 자막이다. 각 줄 앞 [숫자]는 시작 시점(초)이다.\n위 원칙에 따라 구조 요약과 한글·원문 병기 트랜스크립트로 정리해줘.\n\n---\n${transcriptText}`;
-    // 출력 상한은 예상치가 아니라 넉넉하게(최대 128K) 준다 — 잘림 방지.
-    // (스트리밍이라 실제 사용 토큰만 과금/소요되며, 모델은 end_turn에서 자연 종료된다.)
-    return await callJson({ schema: FULL_SCHEMA, maxTokens: OUTPUT_CAP, userText });
+    // 단일 패스는 SINGLE_PASS_BUDGET(≤14K 예상)일 때만 → 출력이 16K 안에 들어 non-streaming 안전.
+    return await callJson({ schema: FULL_SCHEMA, maxTokens: NONSTREAM_MAX, userText });
   }
 
   // 긴 영상: 구조 요약과 트랜스크립트 청크를 "동시에" 처리한다(시간 단축).
@@ -333,7 +334,7 @@ export async function distill(source, meta = {}, onProgress = () => {}) {
     try {
       const part = await callJson({
         schema: TRANSCRIPT_SCHEMA,
-        maxTokens: OUTPUT_CAP,
+        maxTokens: NONSTREAM_MAX,
         userText: isRaw
           ? `${hdr}\n\n아래는 긴 영상 텍스트의 ${i + 1}/${chunks.length} 구간이다(정밀 타임스탬프 없음).\n이 구간을 문단 단위 한글·원문 병기 트랜스크립트로 충실히 정리해줘(timestamp는 ""·seconds는 0). 이 구간만, 요약 금지.\n\n---\n${chunk.text}`
           : `${hdr}\n\n아래는 긴 영상 자막의 ${i + 1}/${chunks.length} 구간이다. 각 줄 앞 [숫자]는 시작 시점(초)이다.\n이 구간을 문단 단위 한글·원문 병기 트랜스크립트로 충실히 정리해줘. (이 구간만, 요약 금지.)\n\n---\n${chunk.text}`,
