@@ -1,17 +1,20 @@
 // 유튜브 자막을 받아 구조 요약 + 한글·원문 병기 트랜스크립트로 증류한다.
-// (Claude claude-opus-4-8, 구조화 JSON 강제 출력, 스트리밍)
+// (Claude Haiku 4.5 — MVP는 가장 저렴한 모델로. 구조화 JSON 강제 출력, 스트리밍)
+//
+// 비용: Haiku 4.5는 입력 $1·출력 $5/1M 토큰으로 Opus(입력 $5·출력 $25)보다 5배 저렴.
+// 번역·정리 작업이라 thinking(사고 토큰=출력 과금)도 꺼서 추가로 절감한다.
 //
 // 처리 전략 (②: 단일 패스 + 자동 폴백):
-//  - 대부분 영상은 단일 호출로 전체를 한 번에 (스트리밍, max_tokens 최대 128K).
-//  - 출력이 한도(~115K 토큰)를 넘을 것으로 추정되는 초장편만 자동으로
+//  - 대부분 영상은 단일 호출로 전체를 한 번에 (스트리밍).
+//  - 출력이 한도를 넘을 것으로 추정되는 초장편만 자동으로
 //    "구조 요약(1회) + 트랜스크립트(청크별)"로 분할 처리해 잘림을 방지한다.
 //
 // 독자 페르소나(반도체 마케터·AI 동향 관심)는 "기본 렌즈"로 쓰되,
 // 무관한 영상까지 억지로 반도체와 연결하지 않도록 연관도를 정직하게 표시한다.
 import Anthropic from "@anthropic-ai/sdk";
 
-const MODEL = "claude-opus-4-8";
-const OUTPUT_CAP = 128000; // Opus 4.8 최대 출력 토큰
+const MODEL = "claude-haiku-4-5";
+const OUTPUT_CAP = 64000; // Haiku 4.5 최대 출력 토큰
 const SINGLE_PASS_BUDGET = 24000; // 예상 출력이 이 토큰을 넘으면 분할(긴 영상은 작은 호출 여러 번)
 const CHUNK_CHARS = 8000; // 분할 시 청크당 원문 자막 문자 수(호출 하나를 작게 → 끊김 위험 최소화)
 const MAX_ATTEMPTS = 5; // callJson 한 호출당 끊김 재시도 횟수
@@ -238,7 +241,8 @@ async function callJson({ schema, maxTokens, userText }) {
         model: MODEL,
         max_tokens: Math.min(OUTPUT_CAP, Math.max(16000, maxTokens)),
         system: SYSTEM,
-        thinking: { type: "adaptive" },
+        // 번역·정리 작업이라 thinking은 끈다(출력으로 과금되는 사고 토큰 절감).
+        thinking: { type: "disabled" },
         output_config: { format: { type: "json_schema", schema } },
         messages: [{ role: "user", content: userText }],
       });
