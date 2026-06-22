@@ -211,8 +211,21 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // 네트워크 일시 끊김(스트림 조기 종료 등)은 재시도로 복구 가능한 부류.
 function isTransient(err) {
   return /premature close|terminated|econnreset|fetch failed|socket|network|aborted|timeout|overloaded|529|500|502|503/i.test(
-    String(err?.message || err),
+    describeErr(err),
   );
+}
+
+/** 에러의 진짜 원인을 사람이 읽을 수 있게 추린다(상태코드·이름·메시지·cause). */
+function describeErr(e) {
+  const parts = [];
+  if (e?.status) parts.push("HTTP " + e.status);
+  if (e?.error?.type) parts.push(e.error.type); // Anthropic 에러 유형(overloaded_error 등)
+  if (e?.name && e.name !== "Error") parts.push(e.name);
+  const msg = e?.message || String(e);
+  if (msg) parts.push(msg);
+  const cause = e?.cause?.message || e?.cause?.code; // undici 등 하위 원인
+  if (cause && !msg.includes(String(cause))) parts.push("(" + cause + ")");
+  return parts.join(" · ").slice(0, 300) || "알 수 없는 오류";
 }
 
 /** json_schema를 강제해 호출하고 파싱된 객체를 돌려준다(스트리밍 + 끊김 재시도). */
@@ -232,11 +245,14 @@ async function callJson({ schema, maxTokens, userText }) {
       message = await stream.finalMessage();
     } catch (e) {
       lastErr = e;
+      // 진짜 원인을 서버 로그에 남긴다(Render 로그에서 확인 가능).
+      console.error(`[distill] callJson 시도 ${attempt}/${MAX_ATTEMPTS} 실패:`, e);
       if (attempt < MAX_ATTEMPTS && isTransient(e)) {
         await sleep(1500 * attempt); // 1.5s → 3 → 4.5 → 6s 백오프
         continue; // 끊겼으면 다시 호출
       }
-      throw new Error("Claude 호출이 중간에 끊겼습니다(네트워크). 다시 시도해 주세요.");
+      // 더는 가리지 않고 진짜 원인을 그대로 드러낸다.
+      throw new Error(`Claude 호출 실패: ${describeErr(e)}`);
     }
 
     const block = message.content.find((b) => b.type === "text");
@@ -286,22 +302,10 @@ export async function distill(source, meta = {}, onProgress = () => {}) {
     return await callJson({ schema: FULL_SCHEMA, maxTokens: OUTPUT_CAP, userText });
   }
 
-  // 긴 영상: 구조 요약(1회) + 트랜스크립트(작은 청크별, 각 호출은 짧고 재시도 가능)
-  // 구조 요약 호출에는 전체 자막을 통째로 넣지 않는다 — 초장편은 입력이 수십만 자라
-  // 그 한 호출이 길어져 끊긴다. 영상 전체에서 고르게 뽑은 대표 발췌만 보낸다(타임스탬프 앵커는
-  // 전 구간에 퍼져 있어 챕터 시점은 그대로 나온다). 본문 트랜스크립트는 아래에서 전체를 충실히 처리.
-  onProgress("구조 요약 작성 중…");
-  const structureText = downsample(transcriptText, STRUCTURE_INPUT_CAP);
-  const sampledNote = structureText.length < transcriptText.length
-    ? "\n(주의: 아래는 긴 영상이라 전체에서 고르게 뽑은 대표 발췌다. 타임스탬프는 전 구간에 퍼져 있으니 목차는 영상 흐름을 대표하도록 작성하고, 발췌 사이 공백을 걱정하지 마라.)"
-    : "";
-  const structure = await callJson({
-    schema: STRUCTURE_SCHEMA,
-    maxTokens: 16000,
-    userText: isRaw
-      ? `${hdr}\n\n아래는 유튜브 영상 페이지에서 자동 추출한 텍스트다(정밀 타임스탬프 없음).${sampledNote} 실제 자막 본문이 있으면 구조 요약(제목·맥락·핵심 시사점·마케터 관점·타임스탬프 목차·핵심 용어)을 작성하고, 메타데이터뿐이면 chapters는 빈 배열로 둬라. (본문 트랜스크립트는 별도 처리하므로 여기선 만들지 마라.)\n\n---\n${structureText}`
-      : `${hdr}\n\n아래는 긴 유튜브 영상의 자막이다. 각 줄 앞 [숫자]는 시작 시점(초)이다.${sampledNote}\n구조 요약(제목·맥락·핵심 시사점·마케터 관점·타임스탬프 목차·핵심 용어)을 작성해줘. (본문 트랜스크립트는 별도로 처리하므로 여기서는 만들지 마라.)\n\n---\n${structureText}`,
-  });
+  // 긴 영상: 트랜스크립트(작은 청크별, 가장 안정적)를 "먼저" 처리하고,
+  // 구조 요약은 "그 다음" 시도한다 — 구조 요약이 끝내 실패해도 핵심 산출물인
+  // 전체 트랜스크립트는 보존된다(부분만 ⚠️ 표시). 진단도 쉬워진다:
+  // 트랜스크립트 청크까지 실패하면 시스템 문제, 구조 요약만 실패하면 그 호출 특유 문제.
 
   // 트랜스크립트용 청크(작게): 자막은 세그먼트 묶음(타임스탬프 보존), 붙여넣기는 텍스트 분할.
   // 각 청크는 { text, startSec } — 실패 시 빈자리 표시에 시작 시점을 쓴다.
@@ -333,12 +337,60 @@ export async function distill(source, meta = {}, onProgress = () => {}) {
         timestamp: sec ? fmtTimestamp(sec) : "",
         seconds: sec,
         original: "",
-        korean: `⚠️ (이 구간 ${i + 1}/${chunks.length}은 네트워크 문제로 가져오지 못했어요. 잠시 후 다시 시도하면 채워집니다.)`,
+        korean: `⚠️ (이 구간 ${i + 1}/${chunks.length}을 가져오지 못했어요: ${describeErr(err)})`,
       });
     }
   }
 
-  return { ...structure, transcript, partial: gaps > 0, gaps, parts: chunks.length };
+  // 구조 요약: 전체를 통째로 넣지 않고 영상 전체에서 고르게 뽑은 대표 발췌만 보낸다
+  // (타임스탬프 앵커가 전 구간에 퍼져 있어 챕터 시점은 보존). 끝내 실패해도 트랜스크립트는 유지.
+  onProgress("구조 요약 작성 중…");
+  const structureText = downsample(transcriptText, STRUCTURE_INPUT_CAP);
+  const sampledNote = structureText.length < transcriptText.length
+    ? "\n(주의: 아래는 긴 영상이라 전체에서 고르게 뽑은 대표 발췌다. 타임스탬프는 전 구간에 퍼져 있으니 목차는 영상 흐름을 대표하도록 작성하고, 발췌 사이 공백을 걱정하지 마라.)"
+    : "";
+  let structure;
+  let structureFailed = false;
+  try {
+    structure = await callJson({
+      schema: STRUCTURE_SCHEMA,
+      maxTokens: 16000,
+      userText: isRaw
+        ? `${hdr}\n\n아래는 유튜브 영상 페이지에서 자동 추출한 텍스트다(정밀 타임스탬프 없음).${sampledNote} 실제 자막 본문이 있으면 구조 요약(제목·맥락·핵심 시사점·마케터 관점·타임스탬프 목차·핵심 용어)을 작성하고, 메타데이터뿐이면 chapters는 빈 배열로 둬라. (본문 트랜스크립트는 별도 처리하므로 여기선 만들지 마라.)\n\n---\n${structureText}`
+        : `${hdr}\n\n아래는 긴 유튜브 영상의 자막이다. 각 줄 앞 [숫자]는 시작 시점(초)이다.${sampledNote}\n구조 요약(제목·맥락·핵심 시사점·마케터 관점·타임스탬프 목차·핵심 용어)을 작성해줘. (본문 트랜스크립트는 별도로 처리하므로 여기서는 만들지 마라.)\n\n---\n${structureText}`,
+    });
+  } catch (err) {
+    // 구조 요약이 끝내 실패 — 트랜스크립트는 이미 확보했으니 최소 메타로 채워 결과를 돌려준다.
+    console.error("[distill] 구조 요약 실패(트랜스크립트는 유지):", err);
+    structureFailed = true;
+    structure = minimalStructure(meta, describeErr(err));
+  }
+
+  return {
+    ...structure,
+    transcript,
+    partial: gaps > 0 || structureFailed,
+    gaps,
+    parts: chunks.length,
+    structureFailed,
+  };
+}
+
+/** 구조 요약 호출이 실패했을 때 쓰는 최소 메타(트랜스크립트는 보존). */
+function minimalStructure(meta, reason) {
+  return {
+    koreanTitle: "",
+    originalTitle: meta.title || "",
+    channel: meta.channel || "",
+    publishedDate: meta.publishedDate || "",
+    sourceLang: "",
+    oneLiner: "",
+    topic: `⚠️ 구조 요약은 일시적 오류로 만들지 못했지만, 아래 전체 트랜스크립트는 정상입니다. (원인: ${reason})`,
+    keyTakeaways: [],
+    marketerAngle: { relevance: "none", notes: [] },
+    chapters: [],
+    keyTerms: [],
+  };
 }
 
 /** 초 → mm:ss / h:mm:ss */
