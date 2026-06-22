@@ -19,6 +19,7 @@ const SINGLE_PASS_BUDGET = 24000; // 예상 출력이 이 토큰을 넘으면 �
 const CHUNK_CHARS = 8000; // 분할 시 청크당 원문 자막 문자 수(호출 하나를 작게 → 끊김 위험 최소화)
 const MAX_ATTEMPTS = 5; // callJson 한 호출당 끊김 재시도 횟수
 const STRUCTURE_INPUT_CAP = 40000; // 구조 요약 호출에 넣을 입력 상한(초장편은 대표 발췌로 축소)
+const CONCURRENCY = 3; // 트랜스크립트 청크 동시 처리 개수(시간 단축, 레이트리밋 여유)
 
 let _client;
 function client() {
@@ -306,10 +307,10 @@ export async function distill(source, meta = {}, onProgress = () => {}) {
     return await callJson({ schema: FULL_SCHEMA, maxTokens: OUTPUT_CAP, userText });
   }
 
-  // 긴 영상: 트랜스크립트(작은 청크별, 가장 안정적)를 "먼저" 처리하고,
-  // 구조 요약은 "그 다음" 시도한다 — 구조 요약이 끝내 실패해도 핵심 산출물인
-  // 전체 트랜스크립트는 보존된다(부분만 ⚠️ 표시). 진단도 쉬워진다:
-  // 트랜스크립트 청크까지 실패하면 시스템 문제, 구조 요약만 실패하면 그 호출 특유 문제.
+  // 긴 영상: 구조 요약과 트랜스크립트 청크를 "동시에" 처리한다(시간 단축).
+  //  - 청크들은 동시 CONCURRENCY개씩 병렬로(순서는 보존). 순차 처리 대비 시간이 크게 준다.
+  //  - 구조 요약은 청크와 독립이라 같이 진행. 둘 다 끝내 실패해도 나머지는 살린다.
+  // (병렬은 시간만 줄일 뿐 토큰량=비용은 동일하다.)
 
   // 트랜스크립트용 청크(작게): 자막은 세그먼트 묶음(타임스탬프 보존), 붙여넣기는 텍스트 분할.
   // 각 청크는 { text, startSec } — 실패 시 빈자리 표시에 시작 시점을 쓴다.
@@ -320,55 +321,43 @@ export async function distill(source, meta = {}, onProgress = () => {}) {
       }))
     : chunkRawText(transcriptText, CHUNK_CHARS).map((text) => ({ text, startSec: 0 }));
 
-  const transcript = [];
+  // 구조 요약(독립 작업)을 먼저 띄워 트랜스크립트와 겹쳐 진행한다.
+  const structurePromise = runStructure(transcriptText, hdr, isRaw, meta);
+
+  // 트랜스크립트 청크 — 동시 CONCURRENCY개씩, 순서 보존, 부분 실패 허용.
+  let done = 0;
   let gaps = 0;
-  for (let i = 0; i < chunks.length; i++) {
-    onProgress(`트랜스크립트 정리 중… (${i + 1}/${chunks.length})`);
+  const onProgressTr = () => onProgress(`트랜스크립트 정리 중… (${done}/${chunks.length}, 병렬)`);
+  onProgressTr();
+  const partResults = await mapPool(chunks, CONCURRENCY, async (chunk, i) => {
     try {
       const part = await callJson({
         schema: TRANSCRIPT_SCHEMA,
         maxTokens: OUTPUT_CAP,
         userText: isRaw
-          ? `${hdr}\n\n아래는 긴 영상 텍스트의 ${i + 1}/${chunks.length} 구간이다(정밀 타임스탬프 없음).\n이 구간을 문단 단위 한글·원문 병기 트랜스크립트로 충실히 정리해줘(timestamp는 ""·seconds는 0). 이 구간만, 요약 금지.\n\n---\n${chunks[i].text}`
-          : `${hdr}\n\n아래는 긴 영상 자막의 ${i + 1}/${chunks.length} 구간이다. 각 줄 앞 [숫자]는 시작 시점(초)이다.\n이 구간을 문단 단위 한글·원문 병기 트랜스크립트로 충실히 정리해줘. (이 구간만, 요약 금지.)\n\n---\n${chunks[i].text}`,
+          ? `${hdr}\n\n아래는 긴 영상 텍스트의 ${i + 1}/${chunks.length} 구간이다(정밀 타임스탬프 없음).\n이 구간을 문단 단위 한글·원문 병기 트랜스크립트로 충실히 정리해줘(timestamp는 ""·seconds는 0). 이 구간만, 요약 금지.\n\n---\n${chunk.text}`
+          : `${hdr}\n\n아래는 긴 영상 자막의 ${i + 1}/${chunks.length} 구간이다. 각 줄 앞 [숫자]는 시작 시점(초)이다.\n이 구간을 문단 단위 한글·원문 병기 트랜스크립트로 충실히 정리해줘. (이 구간만, 요약 금지.)\n\n---\n${chunk.text}`,
       });
-      if (Array.isArray(part.transcript)) transcript.push(...part.transcript);
+      return Array.isArray(part.transcript) ? part.transcript : [];
     } catch (err) {
-      // 한 구간이 끝내 실패해도 전체를 버리지 않는다 — 그 구간만 빈자리로 표시하고 계속.
+      // 한 구간이 끝내 실패해도 전체를 버리지 않는다 — 그 구간만 빈자리로 표시.
       gaps++;
-      const sec = chunks[i].startSec;
-      transcript.push({
+      const sec = chunk.startSec;
+      return [{
         timestamp: sec ? fmtTimestamp(sec) : "",
         seconds: sec,
         original: "",
         korean: `⚠️ (이 구간 ${i + 1}/${chunks.length}을 가져오지 못했어요: ${describeErr(err)})`,
-      });
+      }];
+    } finally {
+      done++;
+      onProgressTr();
     }
-  }
+  });
+  const transcript = partResults.flat(); // 순서 보존(mapPool이 인덱스 순서로 반환)
 
-  // 구조 요약: 전체를 통째로 넣지 않고 영상 전체에서 고르게 뽑은 대표 발췌만 보낸다
-  // (타임스탬프 앵커가 전 구간에 퍼져 있어 챕터 시점은 보존). 끝내 실패해도 트랜스크립트는 유지.
-  onProgress("구조 요약 작성 중…");
-  const structureText = downsample(transcriptText, STRUCTURE_INPUT_CAP);
-  const sampledNote = structureText.length < transcriptText.length
-    ? "\n(주의: 아래는 긴 영상이라 전체에서 고르게 뽑은 대표 발췌다. 타임스탬프는 전 구간에 퍼져 있으니 목차는 영상 흐름을 대표하도록 작성하고, 발췌 사이 공백을 걱정하지 마라.)"
-    : "";
-  let structure;
-  let structureFailed = false;
-  try {
-    structure = await callJson({
-      schema: STRUCTURE_SCHEMA,
-      maxTokens: 16000,
-      userText: isRaw
-        ? `${hdr}\n\n아래는 유튜브 영상 페이지에서 자동 추출한 텍스트다(정밀 타임스탬프 없음).${sampledNote} 실제 자막 본문이 있으면 구조 요약(제목·맥락·핵심 시사점·마케터 관점·타임스탬프 목차·핵심 용어)을 작성하고, 메타데이터뿐이면 chapters는 빈 배열로 둬라. (본문 트랜스크립트는 별도 처리하므로 여기선 만들지 마라.)\n\n---\n${structureText}`
-        : `${hdr}\n\n아래는 긴 유튜브 영상의 자막이다. 각 줄 앞 [숫자]는 시작 시점(초)이다.${sampledNote}\n구조 요약(제목·맥락·핵심 시사점·마케터 관점·타임스탬프 목차·핵심 용어)을 작성해줘. (본문 트랜스크립트는 별도로 처리하므로 여기서는 만들지 마라.)\n\n---\n${structureText}`,
-    });
-  } catch (err) {
-    // 구조 요약이 끝내 실패 — 트랜스크립트는 이미 확보했으니 최소 메타로 채워 결과를 돌려준다.
-    console.error("[distill] 구조 요약 실패(트랜스크립트는 유지):", err);
-    structureFailed = true;
-    structure = minimalStructure(meta, describeErr(err));
-  }
+  onProgress("구조 요약 마무리 중…");
+  const { structure, structureFailed } = await structurePromise;
 
   return {
     ...structure,
@@ -378,6 +367,48 @@ export async function distill(source, meta = {}, onProgress = () => {}) {
     parts: chunks.length,
     structureFailed,
   };
+}
+
+/**
+ * 동시 실행 개수를 limit로 제한하며 items를 fn으로 매핑한다(결과는 입력 순서 보존).
+ * 트랜스크립트 청크를 병렬 처리해 시간을 줄이되, 레이트리밋을 넘지 않게 동시성을 묶는다.
+ */
+async function mapPool(items, limit, fn) {
+  const results = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const idx = next++;
+      results[idx] = await fn(items[idx], idx);
+    }
+  }
+  const n = Math.min(limit, items.length);
+  await Promise.all(Array.from({ length: n }, worker));
+  return results;
+}
+
+/**
+ * 구조 요약 1회 호출(전체를 통째로 넣지 않고 영상 전체에서 고르게 뽑은 대표 발췌만 보냄).
+ * 끝내 실패해도 최소 메타로 채워 트랜스크립트는 보존되도록 {structure, structureFailed} 반환.
+ */
+async function runStructure(transcriptText, hdr, isRaw, meta) {
+  const structureText = downsample(transcriptText, STRUCTURE_INPUT_CAP);
+  const sampledNote = structureText.length < transcriptText.length
+    ? "\n(주의: 아래는 긴 영상이라 전체에서 고르게 뽑은 대표 발췌다. 타임스탬프는 전 구간에 퍼져 있으니 목차는 영상 흐름을 대표하도록 작성하고, 발췌 사이 공백을 걱정하지 마라.)"
+    : "";
+  try {
+    const structure = await callJson({
+      schema: STRUCTURE_SCHEMA,
+      maxTokens: 16000,
+      userText: isRaw
+        ? `${hdr}\n\n아래는 유튜브 영상 페이지에서 자동 추출한 텍스트다(정밀 타임스탬프 없음).${sampledNote} 실제 자막 본문이 있으면 구조 요약(제목·맥락·핵심 시사점·마케터 관점·타임스탬프 목차·핵심 용어)을 작성하고, 메타데이터뿐이면 chapters는 빈 배열로 둬라. (본문 트랜스크립트는 별도 처리하므로 여기선 만들지 마라.)\n\n---\n${structureText}`
+        : `${hdr}\n\n아래는 긴 유튜브 영상의 자막이다. 각 줄 앞 [숫자]는 시작 시점(초)이다.${sampledNote}\n구조 요약(제목·맥락·핵심 시사점·마케터 관점·타임스탬프 목차·핵심 용어)을 작성해줘. (본문 트랜스크립트는 별도로 처리하므로 여기서는 만들지 마라.)\n\n---\n${structureText}`,
+    });
+    return { structure, structureFailed: false };
+  } catch (err) {
+    console.error("[distill] 구조 요약 실패(트랜스크립트는 유지):", err);
+    return { structure: minimalStructure(meta, describeErr(err)), structureFailed: true };
+  }
 }
 
 /** 구조 요약 호출이 실패했을 때 쓰는 최소 메타(트랜스크립트는 보존). */
