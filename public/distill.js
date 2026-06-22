@@ -12,7 +12,8 @@
   "use strict";
 
   const API_URL = "https://api.anthropic.com/v1/messages";
-  const MODEL = "claude-haiku-4-5"; // MVP는 가장 저렴한 모델(입력 $1·출력 $5/1M)
+  const MODEL = "claude-haiku-4-5"; // 트랜스크립트(번역·정리) — 가장 저렴(입력 $1·출력 $5/1M)
+  const STRUCT_MODEL = "claude-sonnet-4-6"; // 구조 요약(시사점·마케터 관점·챕터)만 상위 모델로 — 인사이트 품질↑
   const MAX_OUT = 16000; // 호출당 max_tokens 상한
   const SINGLE_PASS_BUDGET = 14000; // 예상 출력이 이 토큰을 넘으면 분할
   const CHUNK_CHARS = 8000; // 분할 시 청크당 원문 문자 수
@@ -252,7 +253,7 @@
   }
 
   // ── 핵심: 브라우저 fetch + SSE 스트리밍으로 1회 호출 ──────────────────
-  async function callJson({ schema, maxTokens, userText }) {
+  async function callJson({ schema, maxTokens, userText, model }) {
     let lastErr;
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       try {
@@ -265,7 +266,7 @@
             "anthropic-dangerous-direct-browser-access": "true",
           },
           body: JSON.stringify({
-            model: MODEL,
+            model: model || MODEL,
             max_tokens: Math.min(MAX_OUT, Math.max(4000, maxTokens)),
             stream: true,
             system: SYSTEM,
@@ -355,6 +356,7 @@
       const structure = await callJson({
         schema: STRUCTURE_SCHEMA,
         maxTokens: MAX_OUT,
+        model: STRUCT_MODEL, // 구조 요약만 상위 모델(Sonnet)로 — 인사이트 품질↑
         userText: isRaw
           ? `${hdr}\n\n아래는 유튜브 영상 페이지에서 자동 추출한 텍스트다(정밀 타임스탬프 없음).${sampledNote} 실제 자막 본문이 있으면 구조 요약(제목·맥락·핵심 시사점·마케터 관점·타임스탬프 목차·핵심 용어)을 작성하고, 메타데이터뿐이면 chapters는 빈 배열로 둬라. (본문 트랜스크립트는 별도 처리하므로 여기선 만들지 마라.)\n\n---\n${structureText}`
           : `${hdr}\n\n아래는 긴 유튜브 영상의 자막이다. 각 줄 앞 [숫자]는 시작 시점(초)이다.${sampledNote}\n구조 요약(제목·맥락·핵심 시사점·마케터 관점·타임스탬프 목차·핵심 용어)을 작성해줘. (본문 트랜스크립트는 별도로 처리하므로 여기서는 만들지 마라.)\n\n---\n${structureText}`,
