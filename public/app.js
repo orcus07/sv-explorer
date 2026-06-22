@@ -175,9 +175,14 @@ function show(item) {
       "⚠️ 이 영상은 <b>자막 본문</b>을 자동으로 가져오지 못해 영상 설명 기반으로만 요약했어요. " +
       "전체 한글·원문 트랜스크립트가 필요하면 위 <b>“자막 직접 붙여넣기”</b>로 다시 처리해 주세요.";
     notice.classList.remove("hidden");
+  } else if (item.structureFailed) {
+    notice.innerHTML =
+      "⚠️ <b>전체 트랜스크립트는 정상</b>으로 정리됐지만, 위쪽 <b>구조 요약(목차·핵심 시사점 등)</b>은 일시적 오류로 만들지 못했어요. " +
+      "요약이 필요하면 잠시 후 같은 링크로 다시 돌려보세요. 트랜스크립트는 아래에 그대로 있습니다.";
+    notice.classList.remove("hidden");
   } else if (item.partial) {
     notice.innerHTML =
-      `⚠️ 긴 영상이라 <b>${item.parts}개 구간</b> 중 <b>${item.gaps}개</b>를 네트워크 문제로 가져오지 못했어요. ` +
+      `⚠️ 긴 영상이라 <b>${item.parts}개 구간</b> 중 <b>${item.gaps}개</b>를 가져오지 못했어요. ` +
       "구조 요약과 나머지 구간은 그대로 보여드려요. 빈 구간(⚠️ 표시)이 필요하면 잠시 후 같은 링크로 다시 돌리면 채워집니다.";
     notice.classList.remove("hidden");
   } else {
