@@ -188,15 +188,16 @@ body {
 .ts:hover { border-color: var(--link); background: #eff4ff; }
 
 .chapters { list-style: none; padding: 0; }
-.chapter { display: flex; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--border); }
+.chapter { display: flex; flex-wrap: wrap; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--border); }
 .chapter:last-child { border-bottom: none; }
-.chapter .c-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.chapter .c-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
 .chapter .c-body strong { display: block; }
 
-/* 챕터 상세(2차) */
+/* 챕터 상세(2차) — 칩 indent를 벗어나 행 전체 폭으로(가독성) */
 .detail-btn { align-self: flex-start; margin-top: 4px; font-size: 12.5px; }
 .chapter-detail {
-  margin-top: 8px; padding: 12px 14px;
+  flex-basis: 100%; width: 100%;
+  margin-top: 4px; padding: 14px 16px;
   background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px;
 }
 
@@ -223,9 +224,14 @@ body {
 /* 마크다운 본문(2차 결과) */
 .md p { margin: 6px 0; }
 .md .md-h { font-weight: 700; margin: 12px 0 4px; }
-.md ul { margin: 6px 0; padding-left: 20px; }
+.md ul, .md ol { margin: 6px 0; padding-left: 22px; }
 .md li { margin: 3px 0; }
-.md code { background: var(--surface-2); padding: 1px 5px; border-radius: 5px; font-size: 13.5px; }
+.md code { background: rgba(0,0,0,.06); padding: 1px 5px; border-radius: 5px; font-size: 13.5px; }
+.md hr { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
+.md .md-q {
+  margin: 6px 0; padding: 4px 0 4px 12px;
+  border-left: 3px solid var(--border); color: var(--muted);
+}
 
 /* 트랜스크립트 */
 .transcript-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
