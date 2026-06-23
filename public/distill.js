@@ -22,6 +22,7 @@
   const CONCURRENCY = 3; // 청크 동시 처리 개수
 
   let _apiKey = ""; // distill() 호출 동안만 유지
+  let _context = ""; // 독자가 주입한 맥락(관심사·배경). distill() 호출 동안만 유지
 
   // ── 스키마 ────────────────────────────────────────────────────────────
   const META_PROPS = {
@@ -149,6 +150,20 @@
 - 전문 용어는 자연스러운 한국어로 옮기되 필요하면 원어를 괄호로 병기한다.
 - originalTitle과 transcript의 original을 제외한 모든 출력은 한국어로 작성한다.`;
 
+  // 독자가 주입한 맥락을 시스템 프롬프트에 덧붙인다. 페르소나(반도체 마케터)는 그대로 고정하고,
+  // 이 맥락은 oneLiner·topic·keyTakeaways·marketerAngle을 그 관심사/배경 쪽으로 더 날카롭게 맞추는 데 쓴다.
+  function buildSystem() {
+    if (!_context) return SYSTEM;
+    return (
+      SYSTEM +
+      `\n\n---\n[독자가 직접 주입한 맥락]\n${_context}\n\n` +
+      `위 맥락을 반영해 oneLiner·topic·keyTakeaways·marketerAngle을 이 독자의 관심사·배경에 맞게 더 구체적이고 날카롭게 정리하라. ` +
+      `이 맥락은 "초점"을 잡는 용도일 뿐이다 — 원문(영상)에 없는 사실·숫자·고유명사를 지어내지 말고, 영상 근거 안에서 해석하라. ` +
+      `맥락과 영상 내용이 실제로 무관하면 억지로 끼워 맞추지 말고 marketerAngle의 relevance를 솔직히 표시하라. ` +
+      `이 맥락은 해석·요약 필드에만 반영하고, transcript(충실 번역)는 영향받지 않는다.`
+    );
+  }
+
   // ── 유틸 ──────────────────────────────────────────────────────────────
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -269,7 +284,7 @@
             model: model || MODEL,
             max_tokens: Math.min(MAX_OUT, Math.max(4000, maxTokens)),
             stream: true,
-            system: SYSTEM,
+            system: buildSystem(),
             thinking: { type: "disabled" }, // 번역·정리엔 불필요(출력 과금 절감)
             output_config: { format: { type: "json_schema", schema } },
             messages: [{ role: "user", content: userText }],
@@ -384,11 +399,12 @@
   }
 
   // ── 메인 ──────────────────────────────────────────────────────────────
-  async function distill(source, meta, apiKey, onProgress) {
+  async function distill(source, meta, apiKey, onProgress, context) {
     meta = meta || {};
     onProgress = onProgress || function () {};
     if (!apiKey) throw new Error("Anthropic API 키가 필요합니다.");
     _apiKey = apiKey;
+    _context = (context || "").trim().slice(0, 2000); // 과한 입력 방지
 
     const transcriptText = source.segments
       ? buildTimestampedText(source.segments)

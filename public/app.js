@@ -276,6 +276,20 @@ function refreshKeyUI() {
   if (st) st.textContent = has ? "✅ 키 저장됨 (이 브라우저)" : "키가 아직 없습니다";
 }
 
+// ── 맥락 주입 (브라우저에만 저장; 반도체 마케터 페르소나에 더해 관심사·배경을 주입) ──
+const CONTEXT_STORE = "yt-distill-context";
+function getContext() { return (localStorage.getItem(CONTEXT_STORE) || "").trim(); }
+function setContext(c) { localStorage.setItem(CONTEXT_STORE, (c || "").trim()); refreshContextUI(); }
+function refreshContextUI() {
+  const has = !!getContext();
+  const f = $("context-text");
+  if (f && document.activeElement !== f) f.value = getContext();
+  const st = $("context-state");
+  if (st) st.textContent = has ? "✅ 맥락 저장됨 (다음 영상에도 적용)" : "맥락 없음 (기본 반도체 마케터 관점)";
+  const btn = $("toggle-context");
+  if (btn) btn.textContent = has ? "🎯 맥락 적용됨" : "🎯 맥락 추가";
+}
+
 // ── 요청: 서버는 자막만, Claude 호출은 브라우저가 직접 ────────────────────
 async function run(kind, payload) {
   const apiKey = getApiKey();
@@ -309,7 +323,7 @@ async function run(kind, payload) {
       via = "paste";
     }
     // 무거운 Claude 호출은 브라우저가 본인 키로 직접 (Render→Anthropic 끊김 우회)
-    const result = await YTDistill.distill(source, meta, apiKey, (m) => setStatus("⏳ " + m, true));
+    const result = await YTDistill.distill(source, meta, apiKey, (m) => setStatus("⏳ " + m, true), getContext());
     finishRun({ videoId, url: meta.url || "", via, ...result });
   } catch (e) {
     setStatus("⚠️ " + e.message, false);
@@ -345,6 +359,7 @@ $("menu-btn").onclick = openDrawer;
 $("drawer-close").onclick = closeDrawer;
 $("scrim").onclick = closeDrawer;
 $("toggle-paste").onclick = () => $("paste-box").classList.toggle("hidden");
+$("toggle-context").onclick = () => $("context-box").classList.toggle("hidden");
 $("paste-run").onclick = () => {
   const text = $("paste-text").value.trim();
   if (text.length < 100) return setStatus("⚠️ 자막 텍스트가 너무 짧습니다.", false);
@@ -365,6 +380,17 @@ $("key-clear").onclick = () => {
   setApiKey("");
   setStatus("API 키를 삭제했어요.", false);
 };
+
+// 맥락 저장/비우기
+$("context-save").onclick = () => {
+  setContext($("context-text").value);
+  setStatus(getContext() ? "✅ 맥락을 저장했어요. 다음 증류부터 반영됩니다." : "맥락을 비웠어요.", false);
+};
+$("context-clear").onclick = () => {
+  $("context-text").value = "";
+  setContext("");
+  setStatus("맥락을 비웠어요. 기본 반도체 마케터 관점으로 돌아갑니다.", false);
+};
 $("search").addEventListener("input", renderList);
 $("show-original").addEventListener("change", () => current && renderTranscript(current));
 $("delete-btn").onclick = () => {
@@ -379,4 +405,5 @@ $("delete-btn").onclick = () => {
 
 // ── 초기화 ──────────────────────────────────────────────────────────────
 refreshKeyUI();
+refreshContextUI();
 renderList();

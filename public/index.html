@@ -49,8 +49,23 @@
 
   <main class="page">
     <div class="sub-row">
+      <button id="toggle-context" class="link-btn">🎯 맥락 추가</button>
       <button id="toggle-paste" class="link-btn">자막이 막히면 → 자막 직접 붙여넣기</button>
       <span id="status" class="status"></span>
+    </div>
+
+    <!-- 맥락 주입(접힘) — 페르소나는 반도체 마케터로 고정, 관심사·배경만 주입 -->
+    <div id="context-box" class="paste-box hidden">
+      <label for="context-text" class="muted small">
+        관심사·배경을 적으면 <b>핵심 시사점·마케터 관점</b>이 그 쪽으로 더 날카로워집니다.
+        (페르소나는 <b>반도체 마케터</b>로 고정) — 이 브라우저에 저장돼 다음 영상에도 자동 적용됩니다.
+      </label>
+      <textarea id="context-text" rows="3" placeholder="예: 나는 HBM 영업 담당이라 경쟁사 HBM 로드맵·고객 채택 신호에 특히 관심. 다음 주 고객 미팅 준비 중."></textarea>
+      <div class="key-actions">
+        <button id="context-save" class="btn btn-primary small-btn">저장</button>
+        <button id="context-clear" class="btn small-btn">비우기</button>
+        <span id="context-state" class="muted small"></span>
+      </div>
     </div>
 
     <!-- 자막 붙여넣기(접힘) -->
