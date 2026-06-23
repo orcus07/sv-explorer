@@ -269,24 +269,32 @@ function buildSliceText(transcript, startSec, endSec) {
 }
 function buildFullText(transcript) { return buildSliceText(transcript || [], 0, null); }
 
-/** 아주 작은 마크다운 → HTML (소제목/불릿/굵게/코드). esc로 먼저 이스케이프 후 우리 태그만 주입(안전). */
+/** 아주 작은 마크다운 → HTML (소제목/불릿·번호목록/인용/구분선/굵게/코드).
+ *  esc로 먼저 이스케이프한 뒤 우리 태그만 주입하므로 XSS 안전. */
 function renderMarkdown(md) {
   const inline = (s) =>
     esc(s)
       .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
       .replace(/`([^`]+)`/g, "<code>$1</code>");
   let html = "";
-  let inList = false;
-  const closeList = () => { if (inList) { html += "</ul>"; inList = false; } };
+  let list = null; // "ul" | "ol" | null
+  const closeList = () => { if (list) { html += `</${list}>`; list = null; } };
   for (const raw of String(md || "").split("\n")) {
     const line = raw.trimEnd();
     if (!line.trim()) { closeList(); continue; }
     let m;
-    if ((m = line.match(/^#{1,6}\s+(.*)$/))) { closeList(); html += `<p class="md-h">${inline(m[1])}</p>`; }
-    else if ((m = line.match(/^\s*[-*]\s+(.*)$/))) {
-      if (!inList) { html += "<ul>"; inList = true; }
-      html += `<li>${inline(m[1])}</li>`;
-    } else { closeList(); html += `<p>${inline(line)}</p>`; }
+    if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) { closeList(); html += "<hr>"; continue; }
+    if ((m = line.match(/^#{1,6}\s+(.*)$/))) { closeList(); html += `<p class="md-h">${inline(m[1])}</p>`; continue; }
+    if ((m = line.match(/^>\s?(.*)$/))) { closeList(); html += `<p class="md-q">${inline(m[1])}</p>`; continue; }
+    if ((m = line.match(/^\s*\d+\.\s+(.*)$/))) {
+      if (list !== "ol") { closeList(); html += "<ol>"; list = "ol"; }
+      html += `<li>${inline(m[1])}</li>`; continue;
+    }
+    if ((m = line.match(/^\s*[-*]\s+(.*)$/))) {
+      if (list !== "ul") { closeList(); html += "<ul>"; list = "ul"; }
+      html += `<li>${inline(m[1])}</li>`; continue;
+    }
+    closeList(); html += `<p>${inline(line)}</p>`;
   }
   closeList();
   return html;
@@ -316,10 +324,11 @@ function renderChapters(item) {
     const sum = document.createElement("span"); sum.className = "muted small"; sum.textContent = ch.summary || "";
     body.append(head, sum);
 
+    // 상세 박스는 챕터 행(칩+본문) 밖, 전체 폭으로 빼서 가독성 확보(아래 li.append).
+    const detail = canDetail ? document.createElement("div") : null;
     if (canDetail) {
       const startSec = ch.seconds || 0;
       const endSec = i + 1 < chapters.length ? (chapters[i + 1].seconds || null) : null;
-      const detail = document.createElement("div");
       detail.className = "chapter-detail md hidden";
       const btn = document.createElement("button");
       btn.className = "link-btn detail-btn";
@@ -341,9 +350,11 @@ function renderChapters(item) {
         const apiKey = getApiKey();
         if (!apiKey) { openDrawer(); return setStatus("⚠️ 먼저 API 키를 넣어줘 (왼쪽 ☰)", false); }
         const src = buildSliceText(item.transcript, startSec, endSec);
-        if (src.trim().length < 20) return setStatus("⚠️ 이 구간 원문이 비어 있어요.", false);
+        if (src.trim().length < 20) { detail.innerHTML = '<p class="muted">이 구간 원문이 비어 있어요.</p>'; detail.classList.remove("hidden"); return; }
+        // 진행 상황을 클릭한 그 자리(펼친 박스 안)에 바로 표시 — 상단 status에 의존하지 않음.
+        detail.innerHTML = '<p class="muted">⏳ 이 구간 상세 작성 중…</p>';
+        detail.classList.remove("hidden");
         btn.disabled = true; btn.textContent = "⏳ 작성 중…";
-        setStatus("⏳ 구간 상세 작성 중…", true);
         try {
           const ans = await YTDistill.followUp({
             instruction: DETAIL_INSTRUCTION, sourceText: src, scope: ch.heading,
@@ -352,17 +363,17 @@ function renderChapters(item) {
           item.chapterDetails[i] = ans;
           saveArchive();
           paint();
-          setStatus("완료", false);
         } catch (e) {
-          setStatus("⚠️ " + e.message, false);
-          btn.textContent = "🔍 자세히";
+          detail.innerHTML = `<p class="muted">⚠️ ${esc(e.message)}<br>버튼을 다시 누르면 재시도해요.</p>`;
+          btn.textContent = "🔁 다시 시도";
         } finally { btn.disabled = false; }
       };
-      body.append(btn, detail);
+      body.append(btn);
       paint();
     }
 
     li.append(ts, body);
+    if (detail) li.append(detail);
     chEl.appendChild(li);
   });
 }
