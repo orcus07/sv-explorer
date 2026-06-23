@@ -190,7 +190,42 @@ body {
 .chapters { list-style: none; padding: 0; }
 .chapter { display: flex; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--border); }
 .chapter:last-child { border-bottom: none; }
+.chapter .c-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .chapter .c-body strong { display: block; }
+
+/* 챕터 상세(2차) */
+.detail-btn { align-self: flex-start; margin-top: 4px; font-size: 12.5px; }
+.chapter-detail {
+  margin-top: 8px; padding: 12px 14px;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px;
+}
+
+/* 2차 명령창 (B) */
+.followup-box { display: flex; gap: 8px; align-items: flex-end; }
+.followup-box textarea {
+  flex: 1; min-width: 0; padding: 10px 12px; border-radius: 9px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  font: inherit; resize: vertical;
+}
+.followup-box textarea:focus { outline: none; border-color: var(--link); }
+.followup-box .small-btn { white-space: nowrap; }
+.followup-box .small-btn:disabled { opacity: .6; cursor: progress; }
+
+#followup-answers { margin-top: 14px; display: flex; flex-direction: column; gap: 12px; }
+.followup-card {
+  padding: 12px 14px; background: var(--surface);
+  border: 1px solid var(--border); border-left: 4px solid var(--link);
+  border-radius: 0 12px 12px 0;
+}
+.followup-q { font-weight: 700; margin-bottom: 8px; }
+.followup-card .link-btn { color: var(--accent); margin-top: 6px; }
+
+/* 마크다운 본문(2차 결과) */
+.md p { margin: 6px 0; }
+.md .md-h { font-weight: 700; margin: 12px 0 4px; }
+.md ul { margin: 6px 0; padding-left: 20px; }
+.md li { margin: 3px 0; }
+.md code { background: var(--surface-2); padding: 1px 5px; border-radius: 5px; font-size: 13.5px; }
 
 /* 트랜스크립트 */
 .transcript-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }

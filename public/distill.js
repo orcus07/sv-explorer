@@ -361,6 +361,76 @@
     return { text, stopReason };
   }
 
+  // ── 자유 형식(텍스트) 1회 호출 — 2차 명령·상세 풀이용 ────────────────────
+  // callJson과 같지만 output_config(JSON 스키마) 없이 마크다운 텍스트를 그대로 받는다.
+  async function callText({ maxTokens, userText, model }) {
+    let lastErr;
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      try {
+        const res = await fetch(API_URL, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-api-key": _apiKey,
+            "anthropic-version": "2023-06-01",
+            "anthropic-dangerous-direct-browser-access": "true",
+          },
+          body: JSON.stringify({
+            model: model || MODEL,
+            max_tokens: Math.min(MAX_OUT, Math.max(2000, maxTokens)),
+            stream: true,
+            system: buildSystem(),
+            thinking: { type: "disabled" },
+            messages: [{ role: "user", content: userText }],
+          }),
+        });
+        if (!res.ok) {
+          let detail = "", etype = "";
+          try {
+            const j = await res.json();
+            detail = (j && j.error && j.error.message) || "";
+            etype = (j && j.error && j.error.type) || "";
+          } catch (_) { /* ignore */ }
+          const err = new Error(detail || "요청 실패");
+          err.status = res.status;
+          err.type = etype;
+          throw err;
+        }
+        const { text } = await readSSE(res);
+        const out = (text || "").trim();
+        if (!out) throw new Error("빈 응답입니다. 다시 시도해 주세요.");
+        return out;
+      } catch (e) {
+        lastErr = e;
+        if (attempt < MAX_ATTEMPTS && isTransient(e)) { await sleep(1500 * attempt); continue; }
+        throw new Error(`Claude 호출 실패: ${describeErr(e)}`);
+      }
+    }
+    throw lastErr;
+  }
+
+  // ── 2차 명령: 이미 만든 결과(트랜스크립트)를 근거로 추가 요청을 처리 ──────
+  // sourceText = 챕터 구간(또는 전체) 한글·원문 병기 트랜스크립트. instruction = 사용자 요청.
+  async function followUp({ instruction, sourceText, scope, apiKey, context, onProgress }) {
+    onProgress = onProgress || function () {};
+    if (!apiKey) throw new Error("Anthropic API 키가 필요합니다.");
+    if (!instruction || !instruction.trim()) throw new Error("요청 내용을 입력해줘.");
+    if (!sourceText || sourceText.trim().length < 20) throw new Error("근거로 쓸 트랜스크립트가 없어.");
+    _apiKey = apiKey;
+    _context = (context || "").trim().slice(0, 2000);
+    const src = sourceText.length > 150000 ? sourceText.slice(0, 150000) : sourceText;
+    const scopeLine = scope ? `[대상 구간: ${scope}]\n` : "[대상: 영상 전체]\n";
+    const userText =
+      `${scopeLine}아래는 이 유튜브 영상의 한글·원문 병기 트랜스크립트다(근거 자료).\n` +
+      `이 자료에 근거해서 다음 요청을 처리해줘.\n\n[요청]\n${instruction.trim()}\n\n` +
+      `규칙:\n` +
+      `- 원문(영상)에 없는 사실·숫자·고유명사를 지어내지 마라. 자료에 없으면 "자료에 없음"이라고 솔직히 밝혀라.\n` +
+      `- 반도체 마케터(AI 동향) 관점(고정 페르소나)과, 주입된 맥락이 있으면 그 초점을 살려라. 단 무리한 연결은 금지.\n` +
+      `- 한국어로, 읽기 좋은 마크다운(소제목·불릿·굵게)으로 정리해라. 요약이 아니라 깊이 있는 해설로.\n\n---\n${src}`;
+    onProgress("작성 중…");
+    return await callText({ maxTokens: MAX_OUT, userText, model: STRUCT_MODEL });
+  }
+
   // ── 구조 요약(독립 작업) ───────────────────────────────────────────────
   async function runStructure(transcriptText, hdr, isRaw, meta) {
     const structureText = downsample(transcriptText, STRUCTURE_INPUT_CAP);
@@ -491,5 +561,5 @@
     return m ? m[1] : null;
   }
 
-  window.YTDistill = { distill, parseVideoId };
+  window.YTDistill = { distill, parseVideoId, followUp };
 })();

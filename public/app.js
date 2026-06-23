@@ -145,30 +145,19 @@ function show(item) {
   fillList("r-angle", notes);
   $("r-angle-none").classList.toggle("hidden", notes.length > 0);
 
-  // 구조 요약(챕터)
-  const chEl = $("r-chapters");
-  chEl.innerHTML = "";
-  for (const ch of item.chapters || []) {
-    const li = document.createElement("li");
-    li.className = "chapter";
-    const ts = document.createElement("button");
-    ts.className = "ts";
-    ts.textContent = ch.timestamp || fmtTime(ch.seconds);
-    ts.onclick = () => { if (hasVideo) seekTo(ch.seconds); scrollToTranscript(ch.seconds); };
-    const body = document.createElement("div");
-    body.className = "c-body";
-    body.innerHTML = `<strong>${esc(ch.heading)}</strong><span class="muted small">${esc(ch.summary)}</span>`;
-    li.append(ts, body);
-    chEl.appendChild(li);
-  }
+  // 구조 요약(챕터) — 각 챕터에 "🔍 자세히"(2차 상세) 버튼 포함
+  renderChapters(item);
 
   renderTranscript(item);
+  renderFollowups(item);
+  $("followup-input").value = "";
 
   // 빈 섹션 숨김 + 자막 미수집 안내
   const hasChapters = (item.chapters || []).length > 0;
   const hasTranscript = (item.transcript || []).length > 0;
   $("chapters-block").classList.toggle("hidden", !hasChapters);
   $("transcript-block").classList.toggle("hidden", !hasTranscript);
+  $("followup-block").classList.toggle("hidden", !hasTranscript); // 근거(트랜스크립트)가 있어야 2차 명령 가능
   const notice = $("thin-notice");
   if (!hasTranscript) {
     notice.innerHTML =
@@ -256,6 +245,177 @@ function fillList(id, arr) {
     li.textContent = x;
     el.appendChild(li);
   }
+}
+
+// ── 2차 명령 (A: 챕터별 상세 / B: 자유 명령) ─────────────────────────────
+// 둘 다 "이미 만든 트랜스크립트"를 근거로 Claude를 한 번 더 부른다(재추출 없음).
+const DETAIL_INSTRUCTION =
+  "이 구간을 더 상세하게 풀어줘. 핵심 논지와 근거, 등장한 숫자·사례·고유명사·인용을 빠짐없이 정리하고, " +
+  "반도체 마케터(AI 동향) 관점에서 의미 있는 시사점이 있으면 덧붙여줘. 요약이 아니라 깊이 있는 해설로.";
+
+/** 트랜스크립트에서 [startSec, endSec) 구간의 한글·원문 텍스트를 모아준다. endSec=null이면 끝까지. */
+function buildSliceText(transcript, startSec, endSec) {
+  return (transcript || [])
+    .filter((p) => {
+      const s = p.seconds || 0;
+      return s >= startSec && (endSec == null || s < endSec);
+    })
+    .map((p) => {
+      const t = p.timestamp || fmtTime(p.seconds || 0);
+      const o = p.original || "";
+      return `[${t}] ${o}${o ? "\n" : ""}(번역) ${p.korean || ""}`;
+    })
+    .join("\n\n");
+}
+function buildFullText(transcript) { return buildSliceText(transcript || [], 0, null); }
+
+/** 아주 작은 마크다운 → HTML (소제목/불릿/굵게/코드). esc로 먼저 이스케이프 후 우리 태그만 주입(안전). */
+function renderMarkdown(md) {
+  const inline = (s) =>
+    esc(s)
+      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+      .replace(/`([^`]+)`/g, "<code>$1</code>");
+  let html = "";
+  let inList = false;
+  const closeList = () => { if (inList) { html += "</ul>"; inList = false; } };
+  for (const raw of String(md || "").split("\n")) {
+    const line = raw.trimEnd();
+    if (!line.trim()) { closeList(); continue; }
+    let m;
+    if ((m = line.match(/^#{1,6}\s+(.*)$/))) { closeList(); html += `<p class="md-h">${inline(m[1])}</p>`; }
+    else if ((m = line.match(/^\s*[-*]\s+(.*)$/))) {
+      if (!inList) { html += "<ul>"; inList = true; }
+      html += `<li>${inline(m[1])}</li>`;
+    } else { closeList(); html += `<p>${inline(line)}</p>`; }
+  }
+  closeList();
+  return html;
+}
+
+/** 구조 요약(챕터) 렌더 + 각 챕터의 "🔍 자세히"(2차 상세) 버튼. */
+function renderChapters(item) {
+  const chEl = $("r-chapters");
+  chEl.innerHTML = "";
+  const chapters = item.chapters || [];
+  const hasVideo = !!item.videoId;
+  // 타임스탬프가 있어야 구간 slice가 의미 있다(붙여넣기/프록시는 seconds=0뿐 → 버튼 숨김).
+  const canDetail = (item.transcript || []).some((p) => (p.seconds || 0) > 0);
+  item.chapterDetails = item.chapterDetails || {};
+
+  chapters.forEach((ch, i) => {
+    const li = document.createElement("li");
+    li.className = "chapter";
+    const ts = document.createElement("button");
+    ts.className = "ts";
+    ts.textContent = ch.timestamp || fmtTime(ch.seconds);
+    ts.onclick = () => { if (hasVideo) seekTo(ch.seconds); scrollToTranscript(ch.seconds); };
+
+    const body = document.createElement("div");
+    body.className = "c-body";
+    const head = document.createElement("strong"); head.textContent = ch.heading || "";
+    const sum = document.createElement("span"); sum.className = "muted small"; sum.textContent = ch.summary || "";
+    body.append(head, sum);
+
+    if (canDetail) {
+      const startSec = ch.seconds || 0;
+      const endSec = i + 1 < chapters.length ? (chapters[i + 1].seconds || null) : null;
+      const detail = document.createElement("div");
+      detail.className = "chapter-detail md hidden";
+      const btn = document.createElement("button");
+      btn.className = "link-btn detail-btn";
+
+      const paint = () => {
+        const cached = item.chapterDetails[i];
+        if (cached) {
+          detail.innerHTML = renderMarkdown(cached);
+          detail.classList.remove("hidden");
+          btn.textContent = "🔼 접기";
+        } else { detail.classList.add("hidden"); btn.textContent = "🔍 자세히"; }
+      };
+      btn.onclick = async () => {
+        if (item.chapterDetails[i]) { // 이미 받아둠 → 토글
+          detail.classList.toggle("hidden");
+          btn.textContent = detail.classList.contains("hidden") ? "🔍 자세히" : "🔼 접기";
+          return;
+        }
+        const apiKey = getApiKey();
+        if (!apiKey) { openDrawer(); return setStatus("⚠️ 먼저 API 키를 넣어줘 (왼쪽 ☰)", false); }
+        const src = buildSliceText(item.transcript, startSec, endSec);
+        if (src.trim().length < 20) return setStatus("⚠️ 이 구간 원문이 비어 있어요.", false);
+        btn.disabled = true; btn.textContent = "⏳ 작성 중…";
+        setStatus("⏳ 구간 상세 작성 중…", true);
+        try {
+          const ans = await YTDistill.followUp({
+            instruction: DETAIL_INSTRUCTION, sourceText: src, scope: ch.heading,
+            apiKey, context: getContext(),
+          });
+          item.chapterDetails[i] = ans;
+          saveArchive();
+          paint();
+          setStatus("완료", false);
+        } catch (e) {
+          setStatus("⚠️ " + e.message, false);
+          btn.textContent = "🔍 자세히";
+        } finally { btn.disabled = false; }
+      };
+      body.append(btn, detail);
+      paint();
+    }
+
+    li.append(ts, body);
+    chEl.appendChild(li);
+  });
+}
+
+/** B: 저장된 자유 2차 명령 답변들을 렌더. */
+function renderFollowups(item) {
+  const wrap = $("followup-answers");
+  wrap.innerHTML = "";
+  for (const f of item.followups || []) {
+    const card = document.createElement("div");
+    card.className = "followup-card";
+    const q = document.createElement("div");
+    q.className = "followup-q";
+    q.textContent = "💬 " + f.q;
+    const a = document.createElement("div");
+    a.className = "followup-a md";
+    a.innerHTML = renderMarkdown(f.a);
+    const del = document.createElement("button");
+    del.className = "link-btn";
+    del.textContent = "삭제";
+    del.onclick = () => {
+      item.followups = (item.followups || []).filter((x) => x !== f);
+      saveArchive();
+      renderFollowups(item);
+    };
+    card.append(q, a, del);
+    wrap.appendChild(card);
+  }
+}
+
+async function runFollowup() {
+  if (!current) return;
+  const input = $("followup-input");
+  const instruction = input.value.trim();
+  if (!instruction) return setStatus("⚠️ 요청 내용을 입력해줘.", false);
+  const apiKey = getApiKey();
+  if (!apiKey) { openDrawer(); return setStatus("⚠️ 먼저 API 키를 넣어줘 (왼쪽 ☰)", false); }
+  const src = buildFullText(current.transcript);
+  if (src.trim().length < 20) return setStatus("⚠️ 근거로 쓸 트랜스크립트가 없어요.", false);
+  const btn = $("followup-run");
+  btn.disabled = true;
+  setStatus("⏳ 2차 명령 처리 중…", true);
+  try {
+    const ans = await YTDistill.followUp({ instruction, sourceText: src, apiKey, context: getContext() });
+    current.followups = current.followups || [];
+    current.followups.unshift({ q: instruction, a: ans });
+    saveArchive();
+    renderFollowups(current);
+    input.value = "";
+    setStatus("완료 · 2차 명령 결과를 추가했어요", false);
+  } catch (e) {
+    setStatus("⚠️ " + e.message, false);
+  } finally { btn.disabled = false; }
 }
 
 // ── API 키 (브라우저에만 저장; 서버로 보내지 않음) ───────────────────────
@@ -391,6 +551,11 @@ $("context-clear").onclick = () => {
   setContext("");
   setStatus("맥락을 비웠어요. 기본 반도체 마케터 관점으로 돌아갑니다.", false);
 };
+// 2차 명령(B): 버튼 또는 Ctrl/Cmd+Enter
+$("followup-run").onclick = runFollowup;
+$("followup-input").addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); runFollowup(); }
+});
 $("search").addEventListener("input", renderList);
 $("show-original").addEventListener("change", () => current && renderTranscript(current));
 $("delete-btn").onclick = () => {
