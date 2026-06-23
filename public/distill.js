@@ -428,7 +428,16 @@
       `- 반도체 마케터(AI 동향) 관점(고정 페르소나)과, 주입된 맥락이 있으면 그 초점을 살려라. 단 무리한 연결은 금지.\n` +
       `- 한국어로, 읽기 좋은 마크다운(소제목·불릿·굵게)으로 정리해라. 요약이 아니라 깊이 있는 해설로.\n\n---\n${src}`;
     onProgress("작성 중…");
-    return await callText({ maxTokens: MAX_OUT, userText, model: STRUCT_MODEL });
+    // 상위 모델(Sonnet)이 과부하(overloaded/529)로 막히면 Haiku로 자동 폴백 — 혼잡해도 결과는 나오게.
+    try {
+      return await callText({ maxTokens: MAX_OUT, userText, model: STRUCT_MODEL });
+    } catch (e) {
+      if (/overloaded|overload|429|503|529/i.test((e && e.message) || "")) {
+        onProgress("상위 모델이 혼잡해 다른 모델로 재시도…");
+        return await callText({ maxTokens: MAX_OUT, userText, model: MODEL });
+      }
+      throw e;
+    }
   }
 
   // ── 구조 요약(독립 작업) ───────────────────────────────────────────────
@@ -437,17 +446,20 @@
     const sampledNote = structureText.length < transcriptText.length
       ? "\n(주의: 아래는 긴 영상이라 전체에서 고르게 뽑은 대표 발췌다. 타임스탬프는 전 구간에 퍼져 있으니 목차는 영상 흐름을 대표하도록 작성하고, 발췌 사이 공백을 걱정하지 마라.)"
       : "";
+    const userText = isRaw
+      ? `${hdr}\n\n아래는 유튜브 영상 페이지에서 자동 추출한 텍스트다(정밀 타임스탬프 없음).${sampledNote} 실제 자막 본문이 있으면 구조 요약(제목·맥락·핵심 시사점·마케터 관점·타임스탬프 목차·핵심 용어)을 작성하고, 메타데이터뿐이면 chapters는 빈 배열로 둬라. (본문 트랜스크립트는 별도 처리하므로 여기선 만들지 마라.)\n\n---\n${structureText}`
+      : `${hdr}\n\n아래는 긴 유튜브 영상의 자막이다. 각 줄 앞 [숫자]는 시작 시점(초)이다.${sampledNote}\n구조 요약(제목·맥락·핵심 시사점·마케터 관점·타임스탬프 목차·핵심 용어)을 작성해줘. (본문 트랜스크립트는 별도로 처리하므로 여기서는 만들지 마라.)\n\n---\n${structureText}`;
     try {
-      const structure = await callJson({
-        schema: STRUCTURE_SCHEMA,
-        maxTokens: MAX_OUT,
-        model: STRUCT_MODEL, // 구조 요약만 상위 모델(Sonnet)로 — 인사이트 품질↑
-        userText: isRaw
-          ? `${hdr}\n\n아래는 유튜브 영상 페이지에서 자동 추출한 텍스트다(정밀 타임스탬프 없음).${sampledNote} 실제 자막 본문이 있으면 구조 요약(제목·맥락·핵심 시사점·마케터 관점·타임스탬프 목차·핵심 용어)을 작성하고, 메타데이터뿐이면 chapters는 빈 배열로 둬라. (본문 트랜스크립트는 별도 처리하므로 여기선 만들지 마라.)\n\n---\n${structureText}`
-          : `${hdr}\n\n아래는 긴 유튜브 영상의 자막이다. 각 줄 앞 [숫자]는 시작 시점(초)이다.${sampledNote}\n구조 요약(제목·맥락·핵심 시사점·마케터 관점·타임스탬프 목차·핵심 용어)을 작성해줘. (본문 트랜스크립트는 별도로 처리하므로 여기서는 만들지 마라.)\n\n---\n${structureText}`,
-      });
+      // 구조 요약만 상위 모델(Sonnet)로 — 인사이트 품질↑. 과부하로 막히면 Haiku로 폴백.
+      const structure = await callJson({ schema: STRUCTURE_SCHEMA, maxTokens: MAX_OUT, model: STRUCT_MODEL, userText });
       return { structure, structureFailed: false };
     } catch (err) {
+      if (/overloaded|overload|429|503|529/i.test((err && err.message) || "")) {
+        try {
+          const structure = await callJson({ schema: STRUCTURE_SCHEMA, maxTokens: MAX_OUT, model: MODEL, userText });
+          return { structure, structureFailed: false };
+        } catch (_) { /* 폴백도 실패 → 아래 최소 구조 */ }
+      }
       return { structure: minimalStructure(meta, describeErr(err)), structureFailed: true };
     }
   }
