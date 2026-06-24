@@ -416,16 +416,23 @@ async function runFollowup() {
   const btn = $("followup-run");
   btn.disabled = true;
   setStatus("⏳ 2차 명령 처리 중…", true);
+  logReset("💬 2차 명령 로그");
+  logPush("시작 — " + instruction);
   try {
-    const ans = await YTDistill.followUp({ instruction, sourceText: src, apiKey, context: getContext() });
+    const ans = await YTDistill.followUp({
+      instruction, sourceText: src, apiKey, context: getContext(),
+      onProgress: (m) => { setStatus("⏳ " + m, true); logPush(m); },
+    });
     current.followups = current.followups || [];
     current.followups.unshift({ q: instruction, a: ans });
     saveArchive();
     renderFollowups(current);
     input.value = "";
     setStatus("완료 · 2차 명령 결과를 추가했어요", false);
+    logPush("완료 · 결과를 추가했어요", "done");
   } catch (e) {
     setStatus("⚠️ " + e.message, false);
+    logPush("✗ 실패: " + e.message, "err");
   } finally { btn.disabled = false; }
 }
 
@@ -470,12 +477,15 @@ async function run(kind, payload) {
     return setStatus("⚠️ 먼저 Anthropic API 키를 넣어줘 (왼쪽 ☰)", false);
   }
   setStatus("시작하는 중…", true);
+  logReset("⚙️ 진행 로그");
+  logPush(kind === "url" ? "시작 — 링크 처리" : "시작 — 붙여넣은 자막 처리");
   $("run-btn").disabled = true;
   $("paste-run").disabled = true;
   try {
     let source, meta, videoId = null, via = "paste";
     if (kind === "url") {
       setStatus("⏳ 자막 가져오는 중…", true);
+      logPush("자막 가져오는 중… (서버)");
       const res = await fetch("/api/transcript", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -487,17 +497,25 @@ async function run(kind, payload) {
       meta = { title: t.title, channel: t.channel, publishedDate: t.publishedDate, url: payload.url };
       videoId = t.videoId;
       via = t.via;
+      const amount = t.segments ? `${t.segments.length.toLocaleString()}구간` : `${(t.rawText || "").length.toLocaleString()}자`;
+      logPush(`✓ 자막 확보 (${via}, ${amount}) → 증류 시작`, "ok");
     } else {
       source = { rawText: payload.text };
       meta = { title: payload.title, url: payload.url };
       videoId = payload.url ? YTDistill.parseVideoId(payload.url) : null;
       via = "paste";
+      logPush(`✓ 붙여넣은 자막 확보 (${payload.text.length.toLocaleString()}자) → 증류 시작`, "ok");
     }
     // 무거운 Claude 호출은 브라우저가 본인 키로 직접 (Render→Anthropic 끊김 우회)
-    const result = await YTDistill.distill(source, meta, apiKey, (m) => setStatus("⏳ " + m, true), getContext());
+    const result = await YTDistill.distill(
+      source, meta, apiKey,
+      (m) => { setStatus("⏳ " + m, true); logPush(m); },
+      getContext(),
+    );
     finishRun({ videoId, url: meta.url || "", via, ...result });
   } catch (e) {
     setStatus("⚠️ " + e.message, false);
+    logPush("✗ 실패: " + e.message, "err");
   } finally {
     $("run-btn").disabled = false;
     $("paste-run").disabled = false;
@@ -508,11 +526,44 @@ function finishRun(data) {
   upsertArchive(data);
   show(data);
   setStatus("완료 · 보관함에 저장됨", false);
+  logPush("완료 · 보관함에 저장됨", "done");
 }
 function setStatus(msg, busy) {
   const el = $("status");
   el.textContent = msg;
   el.classList.toggle("busy", !!busy);
+}
+
+// ── 진행 로그 콘솔(다크) — 각 단계를 +경과초와 함께 누적 표시 ───────────────
+const now = () => (window.performance && performance.now ? performance.now() : Date.now());
+let _logStart = 0;
+function logReset(title) {
+  _logStart = now();
+  $("log-lines").innerHTML = "";
+  $("log-title").textContent = title || "⚙️ 진행 로그";
+  $("log-console").classList.remove("hidden");
+}
+function logPush(msg, kind) {
+  if (!msg) return;
+  const lines = $("log-lines");
+  if (!lines || $("log-console").classList.contains("hidden")) return;
+  let cls = kind || "";
+  if (!cls) {
+    if (/✗|실패|오류|에러/.test(msg)) cls = "err";
+    else if (/완료|성공|✓/.test(msg)) cls = "ok";
+    else if (/재시도|혼잡|끊김|일시|폴백/.test(msg)) cls = "warn";
+  }
+  const line = document.createElement("div");
+  line.className = "log-line" + (cls ? " " + cls : "");
+  const ts = document.createElement("span");
+  ts.className = "log-t";
+  ts.textContent = "+" + Math.max(0, (now() - _logStart) / 1000).toFixed(1) + "s";
+  const m = document.createElement("span");
+  m.className = "log-msg";
+  m.textContent = msg;
+  line.append(ts, m);
+  lines.appendChild(line);
+  lines.scrollTop = lines.scrollHeight;
 }
 
 // ── 서랍 ────────────────────────────────────────────────────────────────
@@ -562,6 +613,9 @@ $("context-clear").onclick = () => {
   setContext("");
   setStatus("맥락을 비웠어요. 기본 반도체 마케터 관점으로 돌아갑니다.", false);
 };
+// 진행 로그 콘솔 닫기
+$("log-hide").onclick = () => $("log-console").classList.add("hidden");
+
 // 2차 명령(B): 버튼 또는 Ctrl/Cmd+Enter
 $("followup-run").onclick = runFollowup;
 $("followup-input").addEventListener("keydown", (e) => {

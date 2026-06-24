@@ -130,6 +130,29 @@ body {
 }
 .paste-box textarea { resize: vertical; }
 
+/* 진행 로그 콘솔(다크) */
+.log-console {
+  margin: 10px 0 4px; border-radius: 12px; overflow: hidden;
+  background: #0f1117; border: 1px solid #232634;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 12.5px;
+}
+.log-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 7px 12px; background: #161922; color: #9aa3b2;
+  border-bottom: 1px solid #232634; font-size: 12px;
+}
+.log-x { background: none; border: none; color: #9aa3b2; cursor: pointer; font-size: 17px; line-height: 1; padding: 0 4px; }
+.log-x:hover { color: #fff; }
+.log-lines { padding: 9px 12px; max-height: 240px; overflow-y: auto; line-height: 1.75; }
+.log-line { display: flex; gap: 10px; }
+.log-t { color: #5b6472; flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+.log-msg { color: #cdd3de; min-width: 0; word-break: break-word; white-space: pre-wrap; }
+.log-line.ok .log-msg { color: #7ee787; }
+.log-line.err .log-msg { color: #ff7b72; }
+.log-line.warn .log-msg { color: #e3b341; }
+.log-line.done .log-msg { color: #7ee787; font-weight: 600; }
+
 .muted { color: var(--muted); }
 .small { font-size: 13px; font-weight: 400; }
 .hidden { display: none !important; }

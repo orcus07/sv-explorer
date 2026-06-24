@@ -23,6 +23,7 @@
 
   let _apiKey = ""; // distill() 호출 동안만 유지
   let _context = ""; // 독자가 주입한 맥락(관심사·배경). distill() 호출 동안만 유지
+  let _progress = function () {}; // 진행 로그 콜백(distill/followUp 동안만). 재시도·폴백도 여기로.
 
   // ── 스키마 ────────────────────────────────────────────────────────────
   const META_PROPS = {
@@ -318,6 +319,7 @@
       } catch (e) {
         lastErr = e;
         if (attempt < MAX_ATTEMPTS && isTransient(e)) {
+          _progress(`일시 오류 — 재시도 ${attempt + 1}/${MAX_ATTEMPTS}… (${describeErr(e)})`);
           await sleep(1500 * attempt);
           continue;
         }
@@ -402,7 +404,11 @@
         return out;
       } catch (e) {
         lastErr = e;
-        if (attempt < MAX_ATTEMPTS && isTransient(e)) { await sleep(1500 * attempt); continue; }
+        if (attempt < MAX_ATTEMPTS && isTransient(e)) {
+          _progress(`일시 오류 — 재시도 ${attempt + 1}/${MAX_ATTEMPTS}… (${describeErr(e)})`);
+          await sleep(1500 * attempt);
+          continue;
+        }
         throw new Error(`Claude 호출 실패: ${describeErr(e)}`);
       }
     }
@@ -413,6 +419,7 @@
   // sourceText = 챕터 구간(또는 전체) 한글·원문 병기 트랜스크립트. instruction = 사용자 요청.
   async function followUp({ instruction, sourceText, scope, apiKey, context, onProgress }) {
     onProgress = onProgress || function () {};
+    _progress = onProgress;
     if (!apiKey) throw new Error("Anthropic API 키가 필요합니다.");
     if (!instruction || !instruction.trim()) throw new Error("요청 내용을 입력해줘.");
     if (!sourceText || sourceText.trim().length < 20) throw new Error("근거로 쓸 트랜스크립트가 없어.");
@@ -456,6 +463,7 @@
     } catch (err) {
       if (/overloaded|overload|429|503|529/i.test((err && err.message) || "")) {
         try {
+          _progress("구조 요약 혼잡 — Haiku로 폴백 재시도…");
           const structure = await callJson({ schema: STRUCTURE_SCHEMA, maxTokens: MAX_OUT, model: MODEL, userText });
           return { structure, structureFailed: false };
         } catch (_) { /* 폴백도 실패 → 아래 최소 구조 */ }
@@ -484,6 +492,7 @@
   async function distill(source, meta, apiKey, onProgress, context) {
     meta = meta || {};
     onProgress = onProgress || function () {};
+    _progress = onProgress;
     if (!apiKey) throw new Error("Anthropic API 키가 필요합니다.");
     _apiKey = apiKey;
     _context = (context || "").trim().slice(0, 2000); // 과한 입력 방지
@@ -499,7 +508,7 @@
 
     // 단일 패스 (짧은 영상)
     if (estTokens <= SINGLE_PASS_BUDGET) {
-      onProgress("증류 중…");
+      onProgress(`Claude 증류 중… (단일 패스, 번역·구조화) · 본문 ${transcriptText.length.toLocaleString()}자`);
       const userText = isRaw
         ? `${hdr}\n\n아래는 유튜브 영상 페이지에서 자동 추출한 텍스트다(리더 프록시 결과, 정밀 타임스탬프 없음).\n` +
           `- 실제 발화(음성) 자막 본문이 들어 있으면 그것을 문단 단위 한글·원문 병기 트랜스크립트로 충실히 정리하고, timestamp는 ""·seconds는 0으로 둬라.\n` +
@@ -516,12 +525,11 @@
         }))
       : chunkRawText(transcriptText, CHUNK_CHARS).map((text) => ({ text, startSec: 0 }));
 
+    onProgress(`긴 영상 — ${chunks.length}개 구간 분할 + 구조 요약 동시 진행`);
     const structurePromise = runStructure(transcriptText, hdr, isRaw, meta);
 
     let done = 0;
     let gaps = 0;
-    const onProgressTr = () => onProgress(`트랜스크립트 정리 중… (${done}/${chunks.length})`);
-    onProgressTr();
     const partResults = await mapPool(chunks, CONCURRENCY, async (chunk, i) => {
       try {
         const part = await callJson({
@@ -531,9 +539,13 @@
             ? `${hdr}\n\n아래는 긴 영상 텍스트의 ${i + 1}/${chunks.length} 구간이다(정밀 타임스탬프 없음).\n이 구간을 문단 단위 한글·원문 병기 트랜스크립트로 충실히 정리해줘(timestamp는 ""·seconds는 0). 이 구간만, 요약 금지.\n\n---\n${chunk.text}`
             : `${hdr}\n\n아래는 긴 영상 자막의 ${i + 1}/${chunks.length} 구간이다. 각 줄 앞 [숫자]는 시작 시점(초)이다.\n이 구간을 문단 단위 한글·원문 병기 트랜스크립트로 충실히 정리해줘. (이 구간만, 요약 금지.)\n\n---\n${chunk.text}`,
         });
+        done++;
+        onProgress(`✓ 트랜스크립트 구간 ${done}/${chunks.length} 완료`);
         return Array.isArray(part.transcript) ? part.transcript : [];
       } catch (err) {
         gaps++;
+        done++;
+        onProgress(`✗ 트랜스크립트 구간 ${i + 1}/${chunks.length} 실패 (${describeErr(err)})`);
         const sec = chunk.startSec;
         return [{
           timestamp: sec ? fmtTimestamp(sec) : "",
@@ -541,15 +553,13 @@
           original: "",
           korean: `⚠️ (이 구간 ${i + 1}/${chunks.length}을 가져오지 못했어요: ${describeErr(err)})`,
         }];
-      } finally {
-        done++;
-        onProgressTr();
       }
     });
     const transcript = partResults.flat();
 
     onProgress("구조 요약 마무리 중…");
     const { structure, structureFailed } = await structurePromise;
+    onProgress(structureFailed ? "✗ 구조 요약 실패 (트랜스크립트는 정상)" : "✓ 구조 요약 완료");
 
     return Object.assign({}, structure, {
       transcript,
