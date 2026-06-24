@@ -76,6 +76,15 @@
       <button id="paste-run" class="btn btn-primary">붙여넣은 자막 증류</button>
     </div>
 
+    <!-- 진행 로그 콘솔(다크) — 처리 단계가 타임스탬프와 함께 좍 쌓임 -->
+    <section id="log-console" class="log-console hidden" aria-live="polite">
+      <div class="log-head">
+        <span id="log-title">⚙️ 진행 로그</span>
+        <button id="log-hide" class="log-x" aria-label="로그 닫기">×</button>
+      </div>
+      <div id="log-lines" class="log-lines"></div>
+    </section>
+
     <!-- 비어있을 때 안내 -->
     <div id="empty-state" class="empty-state">
       <div class="empty-emoji">🎬→📝</div>
