@@ -384,7 +384,7 @@
 
   // ── 자유 형식(텍스트) 1회 호출 — 2차 명령·상세 풀이용 ────────────────────
   // callJson과 같지만 output_config(JSON 스키마) 없이 마크다운 텍스트를 그대로 받는다.
-  async function callText({ maxTokens, userText, model }) {
+  async function callText({ maxTokens, userText, model, system }) {
     let lastErr;
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       try {
@@ -398,9 +398,9 @@
           },
           body: JSON.stringify({
             model: model || MODEL,
-            max_tokens: Math.min(MAX_OUT, Math.max(2000, maxTokens)),
+            max_tokens: Math.min(MAX_OUT, Math.max(300, maxTokens)),
             stream: true,
-            system: buildSystem(),
+            system: system || buildSystem(), // system 지정 시 페르소나 대신 그것을 사용(프로필 추론 등)
             thinking: { type: "disabled" },
             messages: [{ role: "user", content: userText }],
           }),
@@ -590,6 +590,27 @@
     });
   }
 
+  // ── 내 프로필 자동 정의: 읽은 글들의 요약만으로 "이 독자는 누구인가"를 추론 ──
+  // 전체 본문이 아니라 {title, oneLiner, topic} 요약만 보내 저비용(Haiku, max 600, thinking off).
+  async function defineProfile(summaries, apiKey) {
+    if (!apiKey) throw new Error("Anthropic API 키가 필요합니다.");
+    if (!summaries || !summaries.length) throw new Error("프로필을 만들 읽은 글이 없어요.");
+    _apiKey = apiKey;
+    _progress = function () {};
+    const list = summaries
+      .slice(0, 40)
+      .map((s, i) => `${i + 1}. ${s.title || "(제목 없음)"}\n   한줄: ${s.oneLiner || ""}\n   주제: ${s.topic || ""}`)
+      .join("\n");
+    const system =
+      "너는 독자 프로파일러다. 아래는 한 독자가 읽고 정리한 영상들의 제목·한줄요약·주제 목록이다. " +
+      "이 목록만 근거로 '이 독자는 누구이고 무엇에 관심이 많은가'를 한국어 한 문단(3~5문장)으로 담백하게 추론하라. " +
+      "관심 주제·산업·관점·역할을 구체적으로 적되, 목록에 없는 사실을 지어내거나 과장하지 마라. " +
+      "출력은 그 문단 텍스트만(머리말·불릿·따옴표 없이).";
+    const userText = `독자가 읽고 정리한 글 목록(요약):\n\n${list}`;
+    const out = await callText({ maxTokens: 600, userText, model: MODEL, system });
+    return out.trim();
+  }
+
   // 붙여넣기 URL → videoId (임베드 플레이어용)
   function parseVideoId(input) {
     if (!input) return null;
@@ -603,5 +624,5 @@
     return m ? m[1] : null;
   }
 
-  window.YTDistill = { distill, parseVideoId, followUp };
+  window.YTDistill = { distill, parseVideoId, followUp, defineProfile };
 })();
