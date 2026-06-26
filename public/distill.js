@@ -86,6 +86,23 @@
         additionalProperties: false,
       },
     },
+    keyQuotes: {
+      type: "array",
+      description:
+        "영상에서 인상적이거나 핵심을 찌르는 실제 발언을 원문 그대로 뽑은 인용. 절대 지어내지 말고 자막에 실제로 있는 말만. 핵심을 압축하는 한두 문장 위주로 3~6개(없으면 빈 배열).",
+      items: {
+        type: "object",
+        properties: {
+          timestamp: { type: "string", description: "발언 시점 mm:ss 또는 h:mm:ss(모르면 빈 문자열)" },
+          seconds: { type: "integer", description: "발언 시점(초). 클릭 점프용. 모르면 0" },
+          speaker: { type: "string", description: "화자(알면). 모르면 빈 문자열" },
+          original: { type: "string", description: "원문 그대로의 인용(원어, 그대로 verbatim)" },
+          korean: { type: "string", description: "그 인용의 한글 번역" },
+        },
+        required: ["timestamp", "seconds", "speaker", "original", "korean"],
+        additionalProperties: false,
+      },
+    },
   };
 
   const TRANSCRIPT_PROP = {
@@ -109,7 +126,7 @@
 
   const META_REQUIRED = [
     "koreanTitle", "originalTitle", "channel", "publishedDate", "sourceLang",
-    "oneLiner", "topic", "keyTakeaways", "marketerAngle", "chapters", "keyTerms",
+    "oneLiner", "topic", "keyTakeaways", "marketerAngle", "chapters", "keyTerms", "keyQuotes",
   ];
   const FULL_SCHEMA = {
     type: "object",
@@ -148,8 +165,10 @@
   · 관련이 약하거나 없으면 relevance를 low/none으로 솔직히 표시하고, notes에 그 점을 밝힌다. 억지로 HBM/칩 수요 등에 끼워 맞추지 마라.
   · notes는 "모델의 해석"이다. 원문 사실로 단정하지 말 것.
 
+- keyQuotes: 영상에서 인상적이거나 핵심을 찌르는 "실제 발언"을 원문 그대로(verbatim) 뽑는다. 자막에 없는 말을 절대 지어내지 말고, 의역·요약하지 말 것(번역은 korean 필드에 따로). 가능하면 [초] 표시로 seconds를 채워 클릭 점프가 되게 한다.
+
 - 전문 용어는 자연스러운 한국어로 옮기되 필요하면 원어를 괄호로 병기한다.
-- originalTitle과 transcript의 original을 제외한 모든 출력은 한국어로 작성한다.`;
+- originalTitle과 transcript의 original, keyQuotes의 original을 제외한 모든 출력은 한국어로 작성한다.`;
 
   // 독자가 주입한 맥락을 시스템 프롬프트에 덧붙인다. 페르소나(반도체 마케터)는 그대로 고정하고,
   // 이 맥락은 oneLiner·topic·keyTakeaways·marketerAngle을 그 관심사/배경 쪽으로 더 날카롭게 맞추는 데 쓴다.
@@ -454,8 +473,8 @@
       ? "\n(주의: 아래는 긴 영상이라 전체에서 고르게 뽑은 대표 발췌다. 타임스탬프는 전 구간에 퍼져 있으니 목차는 영상 흐름을 대표하도록 작성하고, 발췌 사이 공백을 걱정하지 마라.)"
       : "";
     const userText = isRaw
-      ? `${hdr}\n\n아래는 유튜브 영상 페이지에서 자동 추출한 텍스트다(정밀 타임스탬프 없음).${sampledNote} 실제 자막 본문이 있으면 구조 요약(제목·맥락·핵심 시사점·마케터 관점·타임스탬프 목차·핵심 용어)을 작성하고, 메타데이터뿐이면 chapters는 빈 배열로 둬라. (본문 트랜스크립트는 별도 처리하므로 여기선 만들지 마라.)\n\n---\n${structureText}`
-      : `${hdr}\n\n아래는 긴 유튜브 영상의 자막이다. 각 줄 앞 [숫자]는 시작 시점(초)이다.${sampledNote}\n구조 요약(제목·맥락·핵심 시사점·마케터 관점·타임스탬프 목차·핵심 용어)을 작성해줘. (본문 트랜스크립트는 별도로 처리하므로 여기서는 만들지 마라.)\n\n---\n${structureText}`;
+      ? `${hdr}\n\n아래는 유튜브 영상 페이지에서 자동 추출한 텍스트다(정밀 타임스탬프 없음).${sampledNote} 실제 자막 본문이 있으면 구조 요약(제목·맥락·핵심 시사점·마케터 관점·타임스탬프 목차·핵심 용어·주요 인용)을 작성하고, 메타데이터뿐이면 chapters는 빈 배열로 둬라. (본문 트랜스크립트는 별도 처리하므로 여기선 만들지 마라.)\n\n---\n${structureText}`
+      : `${hdr}\n\n아래는 긴 유튜브 영상의 자막이다. 각 줄 앞 [숫자]는 시작 시점(초)이다.${sampledNote}\n구조 요약(제목·맥락·핵심 시사점·마케터 관점·타임스탬프 목차·핵심 용어·주요 인용)을 작성해줘. (본문 트랜스크립트는 별도로 처리하므로 여기서는 만들지 마라.)\n\n---\n${structureText}`;
     try {
       // 구조 요약만 상위 모델(Sonnet)로 — 인사이트 품질↑. 과부하로 막히면 Haiku로 폴백.
       const structure = await callJson({ schema: STRUCTURE_SCHEMA, maxTokens: MAX_OUT, model: STRUCT_MODEL, userText });
@@ -485,6 +504,7 @@
       marketerAngle: { relevance: "none", notes: [] },
       chapters: [],
       keyTerms: [],
+      keyQuotes: [],
     };
   }
 
