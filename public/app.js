@@ -508,6 +508,52 @@ function refreshContextUI() {
   if (btn) btn.textContent = has ? "🎯 맥락 적용됨" : "🎯 맥락 추가";
 }
 
+// ── 내 프로필 자동 정의 (읽은 글 요약 → "나는 누구인가" → 관점에 반영) ──────
+const PROFILE_LAST_STORE = "yt-distill-profile-last";       // 마지막 자동 생성값(수동편집 감지 기준)
+const PROFILE_AUTO_STORE = "yt-distill-profile-autoupdate"; // 글 추가 시 자동 갱신 on/off
+function getLastAutoProfile() { return localStorage.getItem(PROFILE_LAST_STORE) || ""; }
+function setLastAutoProfile(v) { localStorage.setItem(PROFILE_LAST_STORE, v || ""); }
+function getProfileAuto() { return localStorage.getItem(PROFILE_AUTO_STORE) === "1"; }
+function setProfileAuto(b) { localStorage.setItem(PROFILE_AUTO_STORE, b ? "1" : "0"); refreshProfileUI(); }
+function refreshProfileUI() { const t = $("profile-auto"); if (t) t.checked = getProfileAuto(); }
+
+function archiveSummaries() {
+  return archive.map((it) => ({
+    title: it.koreanTitle || it.originalTitle || "",
+    oneLiner: it.oneLiner || "",
+    topic: it.topic || "",
+  }));
+}
+
+// explicit=true: 사용자가 버튼을 직접 누름(현재 관점 덮어쓰기 OK)
+// explicit=false: 자동 갱신 — 사용자가 손수 고친 관점이면 보존(덮어쓰지 않음)
+async function defineProfileNow(explicit) {
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    if (explicit) { openDrawer(); setTimeout(() => $("api-key") && $("api-key").focus(), 250); setStatus("⚠️ 먼저 API 키를 넣어줘 (왼쪽 ☰)", false); }
+    return;
+  }
+  const sums = archiveSummaries();
+  if (!sums.length) { if (explicit) setStatus("⚠️ 먼저 영상을 1개 이상 정리해줘.", false); return; }
+  if (!explicit) {
+    const cur = getContext();
+    if (cur && cur !== getLastAutoProfile()) return; // 수동 편집된 관점 → 보존
+  }
+  const btn = $("profile-define");
+  if (btn) btn.disabled = true;
+  setStatus("🧠 내 글들로 프로필 추론 중…", true);
+  try {
+    const profile = await YTDistill.defineProfile(sums, apiKey);
+    setContext(profile);          // 관점(맥락)에 반영 + UI 갱신
+    setLastAutoProfile(profile);  // 자동값 기록(이후 수동편집 감지 기준)
+    setStatus("✅ 프로필을 관점에 반영했어요.", false);
+  } catch (e) {
+    setStatus("⚠️ " + e.message, false);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 // ── 요청: 서버는 자막만, Claude 호출은 브라우저가 직접 ────────────────────
 async function run(kind, payload) {
   const apiKey = getApiKey();
@@ -567,6 +613,8 @@ function finishRun(data) {
   show(data);
   setStatus("완료 · 보관함에 저장됨", false);
   logPush("완료 · 보관함에 저장됨", "done");
+  // 자동 갱신이 켜져 있으면 새 글을 포함해 프로필 재추론(수동 편집 관점은 보존). 본 흐름은 막지 않음.
+  if (getProfileAuto()) defineProfileNow(false);
 }
 function setStatus(msg, busy) {
   const el = $("status");
@@ -653,6 +701,14 @@ $("context-clear").onclick = () => {
   setContext("");
   setStatus("맥락을 비웠어요. 기본 반도체 마케터 관점으로 돌아갑니다.", false);
 };
+
+// 내 프로필 자동 정의
+$("profile-define").onclick = () => defineProfileNow(true);
+$("profile-auto").onchange = (e) => {
+  setProfileAuto(e.target.checked);
+  setStatus(e.target.checked ? "✅ 글 추가 시 프로필을 자동 갱신합니다." : "자동 갱신을 껐어요.", false);
+};
+
 // 진행 로그 콘솔 닫기
 $("log-hide").onclick = () => $("log-console").classList.add("hidden");
 
@@ -676,4 +732,5 @@ $("delete-btn").onclick = () => {
 // ── 초기화 ──────────────────────────────────────────────────────────────
 refreshKeyUI();
 refreshContextUI();
+refreshProfileUI();
 renderList();
