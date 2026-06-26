@@ -147,6 +147,7 @@ function show(item) {
 
   // 구조 요약(챕터) — 각 챕터에 "🔍 자세히"(2차 상세) 버튼 포함
   renderChapters(item);
+  renderQuotes(item);
 
   renderTranscript(item);
   renderFollowups(item);
@@ -156,6 +157,7 @@ function show(item) {
   const hasChapters = (item.chapters || []).length > 0;
   const hasTranscript = (item.transcript || []).length > 0;
   $("chapters-block").classList.toggle("hidden", !hasChapters);
+  $("quotes-block").classList.toggle("hidden", (item.keyQuotes || []).length === 0);
   $("transcript-block").classList.toggle("hidden", !hasTranscript);
   $("followup-block").classList.toggle("hidden", !hasTranscript); // 근거(트랜스크립트)가 있어야 2차 명령 가능
   const notice = $("thin-notice");
@@ -376,6 +378,44 @@ function renderChapters(item) {
     if (detail) li.append(detail);
     chEl.appendChild(li);
   });
+}
+
+/** 주요 인용(원문 그대로) — 타임스탬프 클릭 시 영상·본문 점프. */
+function renderQuotes(item) {
+  const el = $("r-quotes");
+  el.innerHTML = "";
+  const hasVideo = !!item.videoId;
+  for (const q of item.keyQuotes || []) {
+    const li = document.createElement("li");
+    li.className = "quote";
+
+    if (q.timestamp || q.seconds) {
+      const ts = document.createElement("button");
+      ts.className = "ts";
+      ts.textContent = q.timestamp || fmtTime(q.seconds);
+      ts.onclick = () => { if (hasVideo) seekTo(q.seconds || 0); scrollToTranscript(q.seconds || 0); };
+      if (!hasVideo && !(item.transcript || []).length) ts.style.cursor = "default";
+      li.appendChild(ts);
+    }
+
+    const body = document.createElement("blockquote");
+    body.className = "q-body";
+    const orig = document.createElement("p");
+    orig.className = "q-orig";
+    orig.textContent = q.original || "";
+    const ko = document.createElement("p");
+    ko.className = "q-ko";
+    ko.textContent = q.korean || "";
+    body.append(orig, ko);
+    if (q.speaker) {
+      const sp = document.createElement("span");
+      sp.className = "q-speaker";
+      sp.textContent = "— " + q.speaker;
+      body.appendChild(sp);
+    }
+    li.appendChild(body);
+    el.appendChild(li);
+  }
 }
 
 /** B: 저장된 자유 2차 명령 답변들을 렌더. */
