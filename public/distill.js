@@ -115,10 +115,11 @@
         properties: {
           timestamp: { type: "string", description: "이 문단 시작 시점 mm:ss(없으면 빈 문자열)" },
           seconds: { type: "integer", description: "문단 시작 시점(초). 모르면 0" },
+          speaker: { type: "string", description: "이 문단의 화자. 인터뷰·대담 등 화자가 여럿이면 누구 말인지 구분해 채운다(이름을 알면 실제 이름, 모르면 '진행자'/'게스트' 또는 '화자 A'/'화자 B'로 일관되게). 단독 발화·내레이션이면 빈 문자열." },
           original: { type: "string", description: "원문 그대로의 문단(원어)" },
           korean: { type: "string", description: "해당 문단의 한글 번역(맥락 손실 최소화)" },
         },
-        required: ["timestamp", "seconds", "original", "korean"],
+        required: ["timestamp", "seconds", "speaker", "original", "korean"],
         additionalProperties: false,
       },
     },
@@ -154,6 +155,7 @@
 - 번역은 원문(음성)의 의도와 뉘앙스에 충실하게, 맥락 손실을 최소화한다. 임의로 줄이거나 왜곡하지 않는다.
 - transcript는 "요약"이 아니라 영상 흐름을 따라간 충실한 한글·원문 병기 정리다. original에는 원어 문단을, korean에는 그 번역을 담는다. 중요한 논지·근거·숫자·사례를 빠뜨리지 않는다.
 - 자막의 자동 분절(짧은 조각)을 의미 단위 문단으로 자연스럽게 묶는다.
+- 화자 구분: 인터뷰·대담·여러 명이 등장하는 영상이면 각 문단의 speaker를 채워 누구의 말인지 구분한다. 영상 제목·채널·맥락에서 이름을 알 수 있으면 실제 이름(예: 진행자명, 게스트명)을, 모르면 '진행자'/'게스트' 또는 '화자 A'·'화자 B'로 **전체에서 일관되게** 표기한다. 이름을 지어내지 말 것. 단독 발화·내레이션처럼 화자 구분이 무의미하면 speaker는 빈 문자열로 둔다.
 - chapters는 영상의 구조를 한눈에 보여주는 목차다. 자막에 붙은 [초] 타임스탬프를 이용해 각 챕터의 seconds를 정확히 채운다.
 - oneLiner와 topic은 영상의 본질을 증류해 한눈에 파악하게 한다.
 - 원문에 없는 사실·숫자·고유명사를 절대 지어내지 않는다. 확실하지 않으면 적지 않는다.

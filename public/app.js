@@ -9,6 +9,7 @@ let archive = loadArchive();
 let current = null;
 let ytPlayer = null;
 let ytReady = false;
+let speakerFilter = null; // 화자 필터(null=전체)
 
 // ── YouTube IFrame API ─────────────────────────────────────────────────
 (function loadYT() {
@@ -149,6 +150,8 @@ function show(item) {
   renderChapters(item);
   renderQuotes(item);
 
+  speakerFilter = null; // 새 영상 표시 때 화자 필터 초기화
+  renderSpeakerFilter(item);
   renderTranscript(item);
   renderFollowups(item);
   $("followup-input").value = "";
@@ -202,6 +205,7 @@ function renderTranscript(item) {
   const showOrig = $("show-original").checked;
   const hasVideo = !!item.videoId;
   for (const p of item.transcript || []) {
+    if (speakerFilter && (p.speaker || "") !== speakerFilter) continue; // 화자 필터
     const div = document.createElement("div");
     div.className = "tr-para";
     div.dataset.sec = p.seconds || 0;
@@ -247,6 +251,34 @@ function fillList(id, arr) {
     li.textContent = x;
     el.appendChild(li);
   }
+}
+
+/** 화자가 둘 이상이면 "전체 + 화자별" 칩을 띄워 특정 화자만 보게 한다. */
+function renderSpeakerFilter(item) {
+  const wrap = $("speaker-filter");
+  wrap.innerHTML = "";
+  const speakers = [];
+  for (const p of item.transcript || []) {
+    const s = (p.speaker || "").trim();
+    if (s && !speakers.includes(s)) speakers.push(s);
+  }
+  if (speakers.length < 2) { wrap.classList.add("hidden"); return; }
+  wrap.classList.remove("hidden");
+
+  const hint = document.createElement("span");
+  hint.className = "spk-hint";
+  hint.textContent = "화자:";
+  wrap.appendChild(hint);
+
+  const mk = (label, val) => {
+    const b = document.createElement("button");
+    b.className = "spk-chip" + (speakerFilter === val ? " active" : "");
+    b.textContent = label;
+    b.onclick = () => { speakerFilter = val; renderSpeakerFilter(item); renderTranscript(item); };
+    return b;
+  };
+  wrap.appendChild(mk("전체", null));
+  for (const s of speakers) wrap.appendChild(mk(s, s));
 }
 
 // ── 2차 명령 (A: 챕터별 상세 / B: 자유 명령) ─────────────────────────────
