@@ -98,7 +98,7 @@
           seconds: { type: "integer", description: "발언 시점(초). 클릭 점프용. 모르면 0" },
           speaker: { type: "string", description: "화자(알면). 모르면 빈 문자열" },
           original: { type: "string", description: "원문 그대로의 인용(원어, 그대로 verbatim)" },
-          korean: { type: "string", description: "그 인용의 한글 번역" },
+          korean: { type: "string", description: "그 인용의 한글 번역. 단, original이 이미 한국어면 중복하지 말고 빈 문자열로 둔다." },
         },
         required: ["timestamp", "seconds", "speaker", "original", "korean"],
         additionalProperties: false,
@@ -118,7 +118,7 @@
           seconds: { type: "integer", description: "문단 시작 시점(초). 모르면 0" },
           speaker: { type: "string", description: "이 문단의 화자. 인터뷰·대담 등 화자가 여럿이면 누구 말인지 구분해 채운다(이름을 알면 실제 이름, 모르면 '진행자'/'게스트' 또는 '화자 A'/'화자 B'로 일관되게). 단독 발화·내레이션이면 빈 문자열." },
           original: { type: "string", description: "원문 그대로의 문단(원어)" },
-          korean: { type: "string", description: "해당 문단의 한글 번역(맥락 손실 최소화)" },
+          korean: { type: "string", description: "해당 문단의 한글 번역(맥락 손실 최소화). 단, original이 이미 한국어면 똑같은 말을 중복하지 말고 빈 문자열로 둔다." },
         },
         required: ["timestamp", "seconds", "speaker", "original", "korean"],
         additionalProperties: false,
@@ -155,6 +155,7 @@
 번역·정리 원칙:
 - 번역은 원문(음성)의 의도와 뉘앙스에 충실하게, 맥락 손실을 최소화한다. 임의로 줄이거나 왜곡하지 않는다.
 - transcript는 "요약"이 아니라 영상 흐름을 따라간 충실한 한글·원문 병기 정리다. original에는 원어 문단을, korean에는 그 번역을 담는다. 중요한 논지·근거·숫자·사례를 빠뜨리지 않는다.
+- 원문이 이미 한국어인 영상(원어=한국어)은 번역이 필요 없다. 이 경우 original에 한국어 본문을 담고 korean은 빈 문자열("")로 둔다. 같은 한국어를 korean에 또 적어 중복시키지 마라(keyQuotes도 동일).
 - 자막의 자동 분절(짧은 조각)을 의미 단위 문단으로 자연스럽게 묶는다.
 - 화자 구분: 인터뷰·대담·여러 명이 등장하는 영상이면 각 문단의 speaker를 채워 누구의 말인지 구분한다. 영상 제목·채널·맥락에서 이름을 알 수 있으면 실제 이름(예: 진행자명, 게스트명)을, 모르면 '진행자'/'게스트' 또는 '화자 A'·'화자 B'로 **전체에서 일관되게** 표기한다. 이름을 지어내지 말 것. 단독 발화·내레이션처럼 화자 구분이 무의미하면 speaker는 빈 문자열로 둔다.
 - chapters는 영상의 구조를 한눈에 보여주는 목차다. 자막에 붙은 [초] 타임스탬프를 이용해 각 챕터의 seconds를 정확히 채운다.

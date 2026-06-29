@@ -229,11 +229,14 @@ function renderTranscript(item) {
       }
       div.appendChild(head);
     }
+    // 원문이 한국어면 korean이 비어 있다 → original(한국어)을 본문으로 보여준다(중복 방지).
+    const main = (p.korean && p.korean.trim()) ? p.korean : (p.original || "");
     const ko = document.createElement("p");
     ko.className = "tr-ko";
-    ko.textContent = p.korean || "";
+    ko.textContent = main;
     div.appendChild(ko);
-    if (showOrig && p.original) {
+    // 원문 병기: 번역이 따로 있어 본문과 다를 때만 원문을 덧붙인다(한국어 영상은 병기 없음).
+    if (showOrig && p.original && p.original !== main) {
       const orig = document.createElement("p");
       orig.className = "tr-orig";
       orig.textContent = p.original;
@@ -297,7 +300,10 @@ function buildSliceText(transcript, startSec, endSec) {
     .map((p) => {
       const t = p.timestamp || fmtTime(p.seconds || 0);
       const o = p.original || "";
-      return `[${t}] ${o}${o ? "\n" : ""}(번역) ${p.korean || ""}`;
+      const k = p.korean || "";
+      // 한국어 원문은 번역이 비어 있다 → "(번역)" 줄을 붙이지 않는다.
+      const trans = (k && k !== o) ? `${o ? "\n" : ""}(번역) ${k}` : "";
+      return `[${t}] ${o}${trans}`;
     })
     .join("\n\n");
 }
@@ -435,10 +441,14 @@ function renderQuotes(item) {
     const orig = document.createElement("p");
     orig.className = "q-orig";
     orig.textContent = q.original || "";
-    const ko = document.createElement("p");
-    ko.className = "q-ko";
-    ko.textContent = q.korean || "";
-    body.append(orig, ko);
+    body.append(orig);
+    // 원문이 한국어면 korean이 비어 있다 → 같은 한국어를 또 보여주지 않는다.
+    if (q.korean && q.korean.trim() && q.korean !== q.original) {
+      const ko = document.createElement("p");
+      ko.className = "q-ko";
+      ko.textContent = q.korean;
+      body.append(ko);
+    }
     if (q.speaker) {
       const sp = document.createElement("span");
       sp.className = "q-speaker";
