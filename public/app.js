@@ -487,23 +487,20 @@ async function runFollowup() {
   if (src.trim().length < 20) return setStatus("⚠️ 근거로 쓸 트랜스크립트가 없어요.", false);
   const btn = $("followup-run");
   btn.disabled = true;
-  setStatus("⏳ 2차 명령 처리 중…", true);
   logReset("💬 2차 명령 로그");
   logPush("시작 — " + instruction);
   try {
     const ans = await YTDistill.followUp({
       instruction, sourceText: src, apiKey, context: getContext(),
-      onProgress: (m) => { setStatus("⏳ " + m, true); logPush(m); },
+      onProgress: (m) => logPush(m),
     });
     current.followups = current.followups || [];
     current.followups.unshift({ q: instruction, a: ans });
     saveArchive();
     renderFollowups(current);
     input.value = "";
-    setStatus("완료 · 2차 명령 결과를 추가했어요", false);
     logPush("완료 · 결과를 추가했어요", "done");
   } catch (e) {
-    setStatus("⚠️ " + e.message, false);
     logPush("✗ 실패: " + e.message, "err");
   } finally { btn.disabled = false; }
 }
@@ -594,7 +591,6 @@ async function run(kind, payload) {
     setTimeout(() => $("api-key") && $("api-key").focus(), 250);
     return setStatus("⚠️ 먼저 Anthropic API 키를 넣어줘 (왼쪽 ☰)", false);
   }
-  setStatus("시작하는 중…", true);
   logReset("⚙️ 진행 로그");
   logPush(kind === "url" ? "시작 — 링크 처리" : "시작 — 붙여넣은 자막 처리");
   $("run-btn").disabled = true;
@@ -602,7 +598,6 @@ async function run(kind, payload) {
   try {
     let source, meta, videoId = null, via = "paste";
     if (kind === "url") {
-      setStatus("⏳ 자막 가져오는 중…", true);
       logPush("자막 가져오는 중… (서버)");
       const res = await fetch("/api/transcript", {
         method: "POST",
@@ -627,12 +622,11 @@ async function run(kind, payload) {
     // 무거운 Claude 호출은 브라우저가 본인 키로 직접 (Render→Anthropic 끊김 우회)
     const result = await YTDistill.distill(
       source, meta, apiKey,
-      (m) => { setStatus("⏳ " + m, true); logPush(m); },
+      (m) => logPush(m),
       getContext(),
     );
     finishRun({ videoId, url: meta.url || "", via, ...result });
   } catch (e) {
-    setStatus("⚠️ " + e.message, false);
     logPush("✗ 실패: " + e.message, "err");
   } finally {
     $("run-btn").disabled = false;
@@ -643,15 +637,16 @@ async function run(kind, payload) {
 function finishRun(data) {
   upsertArchive(data);
   show(data);
-  setStatus("완료 · 보관함에 저장됨", false);
   logPush("완료 · 보관함에 저장됨", "done");
   // 자동 갱신이 켜져 있으면 새 글을 포함해 프로필 재추론(수동 편집 관점은 보존). 본 흐름은 막지 않음.
   if (getProfileAuto()) defineProfileNow(false);
 }
-function setStatus(msg, busy) {
-  const el = $("status");
-  el.textContent = msg;
-  el.classList.toggle("busy", !!busy);
+// 상태 메시지는 다크 콘솔로 일원화한다(별도 상태창 제거).
+// 진행 중이 아니면(콘솔이 숨겨졌으면) 새로 띄워 단독 한 줄로 보여준다.
+function setStatus(msg, _busy) {
+  if (!msg) return;
+  if ($("log-console").classList.contains("hidden")) logReset("⚙️ 상태");
+  logPush(msg);
 }
 
 // ── 진행 로그 콘솔(다크) — 각 단계를 +경과초와 함께 누적 표시 ───────────────
