@@ -15,8 +15,9 @@
   const MODEL = "claude-haiku-4-5"; // 트랜스크립트(번역·정리) — 가장 저렴(입력 $1·출력 $5/1M)
   const STRUCT_MODEL = "claude-sonnet-4-6"; // 구조 요약(시사점·마케터 관점·챕터)만 상위 모델로 — 인사이트 품질↑
   const MAX_OUT = 16000; // 호출당 max_tokens 상한
-  const SINGLE_PASS_BUDGET = 14000; // 예상 출력이 이 토큰을 넘으면 분할
-  const CHUNK_CHARS = 8000; // 분할 시 청크당 원문 문자 수
+  const SINGLE_PASS_BUDGET = 12000; // 예상 출력이 이 토큰을 넘으면 분할
+  const CHUNK_CHARS = 8000; // 분할 시 청크당 원문 문자 수(라틴 기준 상한; CJK는 더 작게 자동 조정)
+  const CHUNK_OUT_BUDGET = 11000; // 청크당 목표 출력 토큰(16000 상한 대비 여유)
   const MAX_ATTEMPTS = 5; // 호출당 끊김 재시도
   const STRUCTURE_INPUT_CAP = 40000; // 구조 요약 입력 상한(초장편은 대표 발췌)
   const CONCURRENCY = 3; // 청크 동시 처리 개수
@@ -213,7 +214,25 @@
     return lines.join("\n");
   }
 
-  function estimateOutputTokens(chars) { return Math.ceil(chars * 0.7) + 4000; }
+  // 한·중·일(CJK)·한글 문자 비율. 한국어 자막은 출력이 (원문+한글번역) 두 벌인 데다
+  // 문자당 토큰 밀도가 높아, 같은 글자 수라도 영어보다 출력 토큰이 훨씬 많다.
+  function cjkRatio(text) {
+    if (!text) return 0;
+    const m = text.match(/[぀-ヿ㐀-鿿가-힯]/g);
+    return m ? m.length / text.length : 0;
+  }
+
+  // 입력 문자당 예상 출력 토큰 배수. 출력은 original + korean 두 벌이라 기본부터 배가된다.
+  // 라틴(r≈0)≈0.8, 한국어(r≈1)≈2.4 — 8000자 한글 청크가 16000 토큰을 넘겨 잘리던 현상을 반영.
+  function outTokPerChar(text) { return 0.8 + cjkRatio(text) * 1.6; }
+
+  function estimateOutputTokens(text) { return Math.ceil(text.length * outTokPerChar(text)) + 2000; }
+
+  // 언어(토큰 밀도)에 맞춰 청크당 원문 문자 수를 정한다. 한국어처럼 출력이 큰 언어는 더 잘게.
+  function chunkCharsFor(text) {
+    const target = Math.floor(CHUNK_OUT_BUDGET / outTokPerChar(text));
+    return Math.max(2500, Math.min(CHUNK_CHARS, target));
+  }
 
   function downsample(text, maxChars) {
     if (text.length <= maxChars) return text;
@@ -344,7 +363,10 @@
           return JSON.parse(text);
         } catch (_) {
           if (stopReason === "max_tokens") {
-            throw new Error("결과가 출력 한도를 넘어 잘렸습니다. 잠시 후 다시 시도해 주세요.");
+            // 출력이 max_tokens에 닿아 JSON이 잘림. 재시도해도 같은 결과 → 호출부가 더 잘게 쪼개도록 표시.
+            const oe = new Error("결과가 출력 한도를 넘어 잘렸습니다. 더 작은 구간으로 다시 시도합니다.");
+            oe.overflow = true;
+            throw oe;
           }
           throw new Error("결과 JSON 파싱에 실패했습니다. 다시 시도해 주세요.");
         }
@@ -355,7 +377,9 @@
           await sleep(1500 * attempt);
           continue;
         }
-        throw new Error(`Claude 호출 실패: ${describeErr(e)}`);
+        const wrapped = new Error(`Claude 호출 실패: ${describeErr(e)}`);
+        if (e && e.overflow) wrapped.overflow = true; // 출력 한도 초과 표시는 보존
+        throw wrapped;
       }
     }
     throw lastErr;
@@ -521,6 +545,36 @@
     };
   }
 
+  // ── 트랜스크립트 한 구간 처리 (출력 한도 초과 시 더 잘게 쪼개 재귀) ───────
+  // 한국어처럼 출력(원문+번역 두 벌)이 큰 경우, 예상보다 커서 max_tokens에 잘리면
+  // 구간을 절반으로 나눠 각각 다시 처리한다. 실패를 빈 구간으로 떨구지 않고 끝까지 살린다.
+  async function transcribeChunk(text, isRaw, hdr, label, depth) {
+    try {
+      const part = await callJson({
+        schema: TRANSCRIPT_SCHEMA,
+        maxTokens: MAX_OUT,
+        userText: isRaw
+          ? `${hdr}\n\n아래는 긴 영상 텍스트의 ${label} 구간이다(정밀 타임스탬프 없음).\n이 구간을 문단 단위 한글·원문 병기 트랜스크립트로 충실히 정리해줘(timestamp는 ""·seconds는 0). 이 구간만, 요약 금지.\n\n---\n${text}`
+          : `${hdr}\n\n아래는 긴 영상 자막의 ${label} 구간이다. 각 줄 앞 [숫자]는 시작 시점(초)이다.\n이 구간을 문단 단위 한글·원문 병기 트랜스크립트로 충실히 정리해줘. (이 구간만, 요약 금지.)\n\n---\n${text}`,
+      });
+      return Array.isArray(part.transcript) ? part.transcript : [];
+    } catch (err) {
+      if (err && err.overflow && depth < 3 && text.length > 1500) {
+        const halves = chunkRawText(text, Math.ceil(text.length / 2));
+        if (halves.length > 1) {
+          _progress(`… ${label} 구간 출력이 커서 ${halves.length}조각으로 더 나눠 재처리`);
+          const out = [];
+          for (let h = 0; h < halves.length; h++) {
+            const sub = await transcribeChunk(halves[h], isRaw, hdr, `${label}-${h + 1}`, depth + 1);
+            out.push(...sub);
+          }
+          return out;
+        }
+      }
+      throw err;
+    }
+  }
+
   // ── 메인 ──────────────────────────────────────────────────────────────
   async function distill(source, meta, apiKey, onProgress, context) {
     meta = meta || {};
@@ -536,10 +590,10 @@
     if (transcriptText.length < 40) throw new Error("자막 내용이 너무 짧습니다.");
 
     const hdr = header(meta);
-    const estTokens = estimateOutputTokens(transcriptText.length);
+    const estTokens = estimateOutputTokens(transcriptText);
     const isRaw = !source.segments;
 
-    // 단일 패스 (짧은 영상)
+    // 단일 패스 (짧은 영상). 예상이 빗나가 출력 한도를 넘으면 아래 분할 방식으로 자동 전환.
     if (estTokens <= SINGLE_PASS_BUDGET) {
       onProgress(`Claude 증류 중… (단일 패스, 번역·구조화) · 본문 ${transcriptText.length.toLocaleString()}자`);
       const userText = isRaw
@@ -547,16 +601,24 @@
           `- 실제 발화(음성) 자막 본문이 들어 있으면 그것을 문단 단위 한글·원문 병기 트랜스크립트로 충실히 정리하고, timestamp는 ""·seconds는 0으로 둬라.\n` +
           `- 실제 자막 본문이 없고 제목·설명·댓글·관련영상 같은 메타데이터뿐이면, transcript와 chapters는 반드시 빈 배열([])로 두고 변명·설명 문구를 거기에 넣지 마라. 그 경우 oneLiner·topic·keyTakeaways는 확보된 정보 범위에서 작성하되, 내용이 영상 설명 기반임을 topic 끝에 한 문장으로 밝혀라.\n\n---\n${transcriptText}`
         : `${hdr}\n\n아래는 유튜브 영상 자막이다. 각 줄 앞 [숫자]는 시작 시점(초)이다.\n위 원칙에 따라 구조 요약과 한글·원문 병기 트랜스크립트로 정리해줘.\n\n---\n${transcriptText}`;
-      return await callJson({ schema: FULL_SCHEMA, maxTokens: MAX_OUT, userText });
+      try {
+        return await callJson({ schema: FULL_SCHEMA, maxTokens: MAX_OUT, userText });
+      } catch (err) {
+        if (!err || !err.overflow) throw err;
+        onProgress("단일 패스 출력이 한도를 넘어 — 구간 분할 방식으로 전환…");
+        // 아래 분할 경로로 떨어진다.
+      }
     }
 
-    // 긴 영상: 구조 요약 + 트랜스크립트 청크를 동시에(병렬)
+    // 긴 영상: 구조 요약 + 트랜스크립트 청크를 동시에(병렬).
+    // 청크 크기는 언어(토큰 밀도)에 맞춰 정한다 — 한국어 자막은 출력이 커서 더 잘게 자른다.
+    const chunkChars = chunkCharsFor(transcriptText);
     const chunks = source.segments
-      ? chunkSegments(source.segments, CHUNK_CHARS).map((segs) => ({
+      ? chunkSegments(source.segments, chunkChars).map((segs) => ({
           text: buildTimestampedText(segs),
           startSec: segs.length ? Math.floor(segs[0].start) : 0,
         }))
-      : chunkRawText(transcriptText, CHUNK_CHARS).map((text) => ({ text, startSec: 0 }));
+      : chunkRawText(transcriptText, chunkChars).map((text) => ({ text, startSec: 0 }));
 
     onProgress(`긴 영상 — ${chunks.length}개 구간 분할 + 구조 요약 동시 진행`);
     const structurePromise = runStructure(transcriptText, hdr, isRaw, meta);
@@ -565,16 +627,10 @@
     let gaps = 0;
     const partResults = await mapPool(chunks, CONCURRENCY, async (chunk, i) => {
       try {
-        const part = await callJson({
-          schema: TRANSCRIPT_SCHEMA,
-          maxTokens: MAX_OUT,
-          userText: isRaw
-            ? `${hdr}\n\n아래는 긴 영상 텍스트의 ${i + 1}/${chunks.length} 구간이다(정밀 타임스탬프 없음).\n이 구간을 문단 단위 한글·원문 병기 트랜스크립트로 충실히 정리해줘(timestamp는 ""·seconds는 0). 이 구간만, 요약 금지.\n\n---\n${chunk.text}`
-            : `${hdr}\n\n아래는 긴 영상 자막의 ${i + 1}/${chunks.length} 구간이다. 각 줄 앞 [숫자]는 시작 시점(초)이다.\n이 구간을 문단 단위 한글·원문 병기 트랜스크립트로 충실히 정리해줘. (이 구간만, 요약 금지.)\n\n---\n${chunk.text}`,
-        });
+        const items = await transcribeChunk(chunk.text, isRaw, hdr, `${i + 1}/${chunks.length}`, 0);
         done++;
         onProgress(`✓ 트랜스크립트 구간 ${done}/${chunks.length} 완료`);
-        return Array.isArray(part.transcript) ? part.transcript : [];
+        return items;
       } catch (err) {
         gaps++;
         done++;
