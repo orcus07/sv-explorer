@@ -13,7 +13,7 @@
 
   const API_URL = "https://api.anthropic.com/v1/messages";
   const MODEL = "claude-haiku-4-5"; // 트랜스크립트(번역·정리) — 가장 저렴(입력 $1·출력 $5/1M)
-  const STRUCT_MODEL = "claude-sonnet-4-6"; // 구조 요약(시사점·마케터 관점·챕터)만 상위 모델로 — 인사이트 품질↑
+  const STRUCT_MODEL = "claude-sonnet-5"; // 구조 요약(시사점·마케터 관점·챕터)만 상위 모델로 — 인사이트 품질↑
   const MAX_OUT = 16000; // 호출당 max_tokens 상한
   const SINGLE_PASS_BUDGET = 12000; // 예상 출력이 이 토큰을 넘으면 분할
   const CHUNK_CHARS = 8000; // 분할 시 청크당 원문 문자 수(라틴 기준 상한; CJK는 더 작게 자동 조정)
