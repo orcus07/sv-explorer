@@ -183,7 +183,7 @@ body {
 .r-grid.no-player { grid-template-columns: minmax(0, 760px); justify-content: center; }
 .r-body { min-width: 0; }
 
-.r-rail { position: sticky; top: calc(var(--topbar-h) + 16px); }
+.r-rail { position: sticky; top: calc(var(--topbar-h) + 58px); }
 .player-wrap {
   position: relative; width: 100%; aspect-ratio: 16 / 9;
   border-radius: 12px; overflow: hidden; border: 1px solid var(--border); background: #000;
@@ -308,6 +308,84 @@ body {
 .notice b { font-weight: 700; }
 
 .result-actions { display: flex; gap: 10px; margin: 30px 0 10px; }
+
+/* ── 섹션 접기/펼치기 ──────────────────────────────── */
+.block-toggle { cursor: pointer; user-select: none; }
+.block-toggle .chev {
+  flex: 0 0 auto; width: 15px; color: var(--muted); font-size: 12px;
+  transform: translateY(-1px);
+}
+.block-toggle:hover .chev { color: var(--text); }
+.block.collapsed { margin-bottom: 14px; }
+.block.collapsed > *:not(h3) { display: none !important; }
+
+/* ── 떠 있는 미니 목차(TOC) ────────────────────────── */
+.mini-toc {
+  position: sticky; top: var(--topbar-h); z-index: 30;
+  display: flex; gap: 7px; flex-wrap: nowrap; overflow-x: auto;
+  padding: 9px 2px; margin: 0 -2px 12px;
+  background: rgba(245, 246, 248, 0.92); backdrop-filter: blur(6px);
+  border-bottom: 1px solid var(--border);
+  scrollbar-width: thin;
+}
+.mini-toc::-webkit-scrollbar { height: 5px; }
+.mini-toc::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+.toc-chip {
+  flex: 0 0 auto; font-size: 12.5px; padding: 5px 11px; border-radius: 999px;
+  background: var(--surface); border: 1px solid var(--border); color: var(--text);
+  cursor: pointer; white-space: nowrap;
+}
+.toc-chip:hover { border-color: var(--link); color: var(--link); }
+.toc-chip.dim { color: var(--muted); background: var(--surface-2); }
+.toc-master { margin-left: auto; font-weight: 600; border-color: var(--link); color: var(--link); }
+
+/* ── 트랜스크립트: 검색·미니 버튼·클릭 캡쳐 ─────────── */
+.tr-search {
+  flex: 1; min-width: 140px; padding: 7px 12px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: 14px;
+}
+.tr-search:focus { outline: none; border-color: var(--link); }
+.tr-mini {
+  background: none; border: 1px solid var(--border); color: var(--muted);
+  border-radius: 7px; padding: 1px 8px; font-size: 12px; cursor: pointer; line-height: 1.6;
+}
+.tr-mini:hover { border-color: var(--link); color: var(--link); background: #eff4ff; }
+.cap-trigger { cursor: pointer; }
+.cap-trigger:hover { color: var(--link); }
+.tr-orig.cap-trigger:hover { border-left-color: var(--link); }
+.tr-hide { display: none !important; }
+.tr-hit { background: #fffbeb; border-radius: 8px; }
+.chapter.flash { background: #fffbeb; border-radius: 8px; }
+.chapter { scroll-margin-top: calc(var(--topbar-h) + 52px); }
+
+/* ── 자막 캡쳐 모달 ─────────────────────────────────── */
+.cap-modal { position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center; padding: 18px; }
+.cap-scrim { position: absolute; inset: 0; background: rgba(0,0,0,.55); }
+.cap-card {
+  position: relative; z-index: 1; width: min(560px, 100%);
+  background: #12141a; color: #eef0f5; border: 1px solid #2a2e3a;
+  border-radius: 14px; padding: 14px; box-shadow: 0 20px 60px rgba(0,0,0,.4);
+}
+.cap-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.cap-title { font-weight: 700; font-size: 15px; }
+.cap-head .icon-btn { color: #cdd3de; }
+.cap-head .icon-btn:hover { background: #232634; }
+.cap-stage { border-radius: 10px; overflow: hidden; background: #000; line-height: 0; }
+.cap-stage canvas { width: 100%; height: auto; display: block; }
+#cap-note { margin: 10px 2px 12px; color: #9aa3b2; }
+.cap-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.cap-actions .btn { background: #1b1e27; border-color: #2a2e3a; color: #eef0f5; }
+.cap-actions .btn:hover { border-color: var(--link); }
+.cap-actions .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* ── 맨 위로 ────────────────────────────────────────── */
+.to-top {
+  position: fixed; right: 18px; bottom: 18px; z-index: 45;
+  width: 44px; height: 44px; border-radius: 50%;
+  background: var(--surface); border: 1px solid var(--border); color: var(--text);
+  font-size: 20px; cursor: pointer; box-shadow: 0 6px 20px rgba(0,0,0,.14);
+}
+.to-top:hover { border-color: var(--link); color: var(--link); }
 
 /* ── 반응형 ────────────────────────────────────────── */
 @media (max-width: 880px) {
