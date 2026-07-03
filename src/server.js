@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 import express from "express";
 
 import { fetchTranscript } from "./lib/fetchTranscript.js";
+import { getStoryboard } from "./lib/storyboard.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..");
@@ -42,6 +43,43 @@ app.post("/api/transcript", async (req, res) => {
     });
   } catch (err) {
     res.status(502).json({ error: err.message || "자막을 가져오지 못했습니다." });
+  }
+});
+
+// 링크 → 스토리보드(미리보기 프레임) 스펙. 브라우저가 특정 시점 타일을 잘라 자막을 얹어 캡쳐한다.
+// 실패해도 200 + { ok:false }로 응답 → 프론트가 썸네일 자막 카드로 폴백한다.
+app.get("/api/storyboard", async (req, res) => {
+  const v = (req.query.v || "").toString().trim();
+  if (!v) return res.json({ ok: false, reason: "no_video" });
+  try {
+    const sb = await getStoryboard(v);
+    res.json(sb);
+  } catch (err) {
+    res.json({ ok: false, reason: "error", detail: err.message || "" });
+  }
+});
+
+// 스토리보드/썸네일 이미지 프록시 — i.ytimg.com 만 허용(SSRF 방지). CORS 헤더를 붙여
+// 브라우저 캔버스가 오염 없이 그려 PNG로 뽑을 수 있게 한다.
+app.get("/api/sb-image", async (req, res) => {
+  const u = (req.query.u || "").toString();
+  let target;
+  try { target = new URL(u); } catch { return res.status(400).send("bad url"); }
+  if (target.protocol !== "https:" || target.hostname !== "i.ytimg.com") {
+    return res.status(403).send("host not allowed");
+  }
+  try {
+    const upstream = await fetch(target.href, {
+      headers: { "User-Agent": "Mozilla/5.0", "Accept": "image/jpeg,image/*" },
+    });
+    if (!upstream.ok) return res.status(502).send(`upstream ${upstream.status}`);
+    const buf = Buffer.from(await upstream.arrayBuffer());
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Content-Type", upstream.headers.get("content-type") || "image/jpeg");
+    res.set("Cache-Control", "public, max-age=86400");
+    res.send(buf);
+  } catch (err) {
+    res.status(502).send("fetch failed");
   }
 });
 
