@@ -111,19 +111,21 @@
       <blockquote id="r-oneliner"></blockquote>
       <p id="thin-notice" class="notice hidden"></p>
 
+      <nav id="mini-toc" class="mini-toc" aria-label="섹션 이동"></nav>
+
       <div class="r-grid" id="r-grid">
         <div class="r-body">
-          <section class="block">
+          <section class="block" id="topic-block">
             <h3>이 영상은?</h3>
             <p id="r-topic"></p>
           </section>
 
-          <section class="block">
+          <section class="block" id="takeaways-block">
             <h3>💡 핵심 시사점</h3>
             <ul id="r-takeaways"></ul>
           </section>
 
-          <section class="block">
+          <section class="block" id="angle-block">
             <h3>📌 반도체 마케터 관점 <span id="r-relevance" class="relevance"></span></h3>
             <ul id="r-angle"></ul>
             <p id="r-angle-none" class="muted small hidden">이 영상은 반도체·AI 마케팅과 직접 연관은 약해요.</p>
@@ -140,8 +142,9 @@
           </section>
 
           <section class="block" id="transcript-block">
+            <h3>📝 트랜스크립트 <span class="muted small">한글·원문 병기 · 원문 클릭 → 자막 캡쳐</span></h3>
             <div class="transcript-head">
-              <h3>📝 트랜스크립트 <span class="muted small">한글·원문 병기</span></h3>
+              <input id="transcript-search" type="search" class="tr-search" placeholder="🔎 이 트랜스크립트에서 찾기…" />
               <label class="toggle"><input type="checkbox" id="show-original" checked /> 원문 함께</label>
             </div>
             <div id="speaker-filter" class="speaker-filter hidden"></div>
@@ -175,6 +178,26 @@
       </div>
     </article>
   </main>
+
+  <!-- 자막 캡쳐 모달 — 트랜스크립트 원문 클릭 시 그 시점 프레임 + 한/영 자막을 사진처럼 -->
+  <div id="cap-modal" class="cap-modal hidden" role="dialog" aria-modal="true" aria-label="자막 캡쳐">
+    <div class="cap-scrim"></div>
+    <div class="cap-card">
+      <div class="cap-head">
+        <span class="cap-title">📸 자막 캡쳐</span>
+        <button id="cap-close" class="icon-btn" aria-label="닫기">×</button>
+      </div>
+      <div id="cap-stage" class="cap-stage"><canvas id="cap-canvas"></canvas></div>
+      <p id="cap-note" class="muted small"></p>
+      <div class="cap-actions">
+        <button id="cap-download" class="btn btn-primary small-btn">📥 다운로드</button>
+        <button id="cap-copy" class="btn small-btn">📋 이미지 복사</button>
+        <button id="cap-open" class="btn small-btn">▶ 그 시점 영상 열기</button>
+      </div>
+    </div>
+  </div>
+
+  <button id="to-top" class="to-top hidden" aria-label="맨 위로">⤒</button>
 
   <script src="distill.js"></script>
   <script src="app.js"></script>
