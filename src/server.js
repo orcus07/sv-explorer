@@ -21,12 +21,23 @@ const app = express();
 app.use(express.json({ limit: "2mb" }));
 app.use(express.static(path.join(ROOT, "public")));
 
+// (선택) 접근 토큰 게이트 — 공개 URL에서 남이 서버 자막 수집(내 Supadata 쿼터)을
+// 함부로 못 쓰게 막는다. APP_ACCESS_TOKEN 이 설정된 경우에만 활성화되며,
+// 없으면(로컬·기존 배포) 그대로 열려 있어 하위호환. 클라이언트는 x-app-token 헤더로 보낸다.
+const ACCESS_TOKEN = (process.env.APP_ACCESS_TOKEN || "").trim();
+function requireToken(req, res, next) {
+  if (!ACCESS_TOKEN) return next(); // 미설정 → 공개(기존 동작)
+  const given = (req.get("x-app-token") || req.query.token || "").toString();
+  if (given === ACCESS_TOKEN) return next();
+  return res.status(401).json({ error: "앱 접근 토큰이 필요합니다(또는 틀림). 화면 ☰ 에서 입력하세요." });
+}
+
 app.get("/api/health", (_req, res) => {
-  res.json({ supadata: Boolean(process.env.SUPADATA_API_KEY) });
+  res.json({ supadata: Boolean(process.env.SUPADATA_API_KEY), tokenRequired: Boolean(ACCESS_TOKEN) });
 });
 
 // 링크 → 자막 추출 (동기 응답; Claude 호출은 브라우저가 직접 함)
-app.post("/api/transcript", async (req, res) => {
+app.post("/api/transcript", requireToken, async (req, res) => {
   const { url } = req.body || {};
   if (!url || !url.trim()) {
     return res.status(400).json({ error: "링크가 없습니다." });
@@ -48,7 +59,7 @@ app.post("/api/transcript", async (req, res) => {
 
 // 링크 → 스토리보드(미리보기 프레임) 스펙. 브라우저가 특정 시점 타일을 잘라 자막을 얹어 캡쳐한다.
 // 실패해도 200 + { ok:false }로 응답 → 프론트가 썸네일 자막 카드로 폴백한다.
-app.get("/api/storyboard", async (req, res) => {
+app.get("/api/storyboard", requireToken, async (req, res) => {
   const v = (req.query.v || "").toString().trim();
   if (!v) return res.json({ ok: false, reason: "no_video" });
   try {
