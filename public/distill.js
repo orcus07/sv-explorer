@@ -289,6 +289,14 @@
     );
   }
 
+  // 모델 ID가 유효하지 않을 때(리네임·디프리케이트) — 폴백 모델로 강등하기 위한 판별.
+  function isModelError(err) {
+    const t = ((err && err.type) || "").toLowerCase();
+    if (t === "not_found_error") return true;
+    const m = ((err && err.message) || "").toLowerCase();
+    return /model/.test(m) && /(not found|not_found|does not exist|invalid|unknown|deprecat)/.test(m);
+  }
+
   function chunkRawText(text, maxChars) {
     const chunks = [];
     let i = 0;
@@ -435,7 +443,7 @@
 
   // ── 자유 형식(텍스트) 1회 호출 — 2차 명령·상세 풀이용 ────────────────────
   // callJson과 같지만 output_config(JSON 스키마) 없이 마크다운 텍스트를 그대로 받는다.
-  async function callText({ maxTokens, userText, model, system }) {
+  async function callText({ maxTokens, userText, content, model, system }) {
     let lastErr;
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       try {
@@ -453,7 +461,7 @@
             stream: true,
             system: systemParam(system || buildSystem()), // system 지정 시 페르소나 대신 그것을 사용(프로필 추론 등)
             thinking: { type: "disabled" },
-            messages: [{ role: "user", content: userText }],
+            messages: [{ role: "user", content: content || userText }],
           }),
         });
         if (!res.ok) {
@@ -497,21 +505,26 @@
     _context = (context || "").trim().slice(0, 2000);
     const src = sourceText.length > 150000 ? sourceText.slice(0, 150000) : sourceText;
     const scopeLine = scope ? `[대상 구간: ${scope}]\n` : "[대상: 영상 전체]\n";
-    const userText =
-      `${scopeLine}아래는 이 유튜브 영상의 한글·원문 병기 트랜스크립트다(근거 자료).\n` +
-      `이 자료에 근거해서 다음 요청을 처리해줘.\n\n[요청]\n${instruction.trim()}\n\n` +
+    // 프롬프트 캐싱: 트랜스크립트+규칙(영상마다 고정, 큰 덩어리)을 캐시 블록으로 앞에 두고,
+    // 매번 바뀌는 [요청]만 뒤에 둔다 → 같은 영상에 2차 명령을 반복해도 트랜스크립트가 재과금되지 않는다.
+    const stableText =
+      `${scopeLine}아래는 이 유튜브 영상의 한글·원문 병기 트랜스크립트다(근거 자료). 이 자료에 근거해 요청을 처리한다.\n` +
       `규칙:\n` +
       `- 원문(영상)에 없는 사실·숫자·고유명사를 지어내지 마라. 자료에 없으면 "자료에 없음"이라고 솔직히 밝혀라.\n` +
       `- 반도체 마케터(AI 동향) 관점(고정 페르소나)과, 주입된 맥락이 있으면 그 초점을 살려라. 단 무리한 연결은 금지.\n` +
       `- 한국어로, 읽기 좋은 마크다운(소제목·불릿·굵게)으로 정리해라. 요약이 아니라 깊이 있는 해설로.\n\n---\n${src}`;
+    const content = [
+      { type: "text", text: stableText, cache_control: { type: "ephemeral" } },
+      { type: "text", text: `\n\n[요청]\n${instruction.trim()}` },
+    ];
     onProgress("작성 중…");
-    // 상위 모델(Sonnet)이 과부하(overloaded/529)로 막히면 Haiku로 자동 폴백 — 혼잡해도 결과는 나오게.
+    // 상위 모델(Sonnet)이 과부하(529)로 막히거나 모델 ID가 유효하지 않으면 Haiku로 자동 폴백.
     try {
-      return await callText({ maxTokens: MAX_OUT, userText, model: STRUCT_MODEL });
+      return await callText({ maxTokens: MAX_OUT, content, model: STRUCT_MODEL });
     } catch (e) {
-      if (/overloaded|overload|429|503|529/i.test((e && e.message) || "")) {
-        onProgress("상위 모델이 혼잡해 다른 모델로 재시도…");
-        return await callText({ maxTokens: MAX_OUT, userText, model: MODEL });
+      if (/overloaded|overload|429|503|529/i.test((e && e.message) || "") || isModelError(e)) {
+        onProgress(isModelError(e) ? "상위 모델 ID가 유효하지 않아 다른 모델로 재시도…" : "상위 모델이 혼잡해 다른 모델로 재시도…");
+        return await callText({ maxTokens: MAX_OUT, content, model: MODEL });
       }
       throw e;
     }
@@ -531,9 +544,9 @@
       const structure = await callJson({ schema: STRUCTURE_SCHEMA, maxTokens: MAX_OUT, model: STRUCT_MODEL, userText });
       return { structure, structureFailed: false };
     } catch (err) {
-      if (/overloaded|overload|429|503|529/i.test((err && err.message) || "")) {
+      if (/overloaded|overload|429|503|529/i.test((err && err.message) || "") || isModelError(err)) {
         try {
-          _progress("구조 요약 혼잡 — Haiku로 폴백 재시도…");
+          _progress(isModelError(err) ? "구조 요약 모델 ID 오류 — Haiku로 폴백 재시도…" : "구조 요약 혼잡 — Haiku로 폴백 재시도…");
           const structure = await callJson({ schema: STRUCTURE_SCHEMA, maxTokens: MAX_OUT, model: MODEL, userText });
           return { structure, structureFailed: false };
         } catch (_) { /* 폴백도 실패 → 아래 최소 구조 */ }
