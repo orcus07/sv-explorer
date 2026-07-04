@@ -40,7 +40,24 @@
       </p>
     </div>
 
+    <!-- (선택) 앱 접근 토큰 — 서버가 APP_ACCESS_TOKEN 을 설정한 경우에만 필요 -->
+    <div id="apptoken-box" class="key-box hidden">
+      <label for="app-token"><strong>🎫 앱 접근 토큰</strong></label>
+      <input id="app-token" type="password" autocomplete="off" placeholder="서버 관리자에게 받은 토큰" />
+      <div class="key-actions">
+        <button id="apptoken-save" class="btn btn-primary small-btn">저장</button>
+        <span id="apptoken-state" class="muted small"></span>
+      </div>
+      <p class="muted small key-note">이 서버는 자막 수집에 접근 토큰이 필요해. 브라우저에만 저장돼.</p>
+    </div>
+
     <hr class="drawer-sep" />
+    <div class="backup-row">
+      <button id="export-btn" class="btn small-btn">⬇ 보관함 백업(내보내기)</button>
+      <button id="import-btn" class="btn small-btn">⬆ 가져오기</button>
+      <input id="import-file" type="file" accept="application/json,.json" class="hidden" />
+    </div>
+    <p id="storage-note" class="muted small"></p>
     <input id="search" type="search" placeholder="본 영상 검색…" />
     <ul id="list" class="list"></ul>
     <p id="empty-list" class="muted">아직 정리한 영상이 없습니다.</p>

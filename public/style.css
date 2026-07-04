@@ -113,6 +113,9 @@ body {
 .key-note { line-height: 1.5; margin: 2px 0 0; }
 .key-note a { color: var(--link); }
 .drawer-sep { width: 100%; border: none; border-top: 1px solid var(--border); margin: 12px 0; }
+.backup-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.backup-row .small-btn { flex: 1; justify-content: center; white-space: nowrap; }
+#storage-note { margin: 0 0 10px; }
 
 /* ── 본문 ──────────────────────────────────────────── */
 .page { max-width: var(--maxw); margin: 0 auto; padding: 18px 20px 60px; }

@@ -205,6 +205,13 @@
     );
   }
 
+  // 시스템 프롬프트를 프롬프트 캐싱(cache_control) 블록으로 감싼다.
+  // 같은 시스템 프롬프트를 청크 병렬·재시도·2차 명령에서 반복 전송하므로, 캐시되면
+  // 그 부분 입력비가 크게 줄고 응답도 빨라진다. (임계 토큰 미만이면 API가 캐싱을 무시할 뿐 안전)
+  function systemParam(sys) {
+    return [{ type: "text", text: sys, cache_control: { type: "ephemeral" } }];
+  }
+
   // ── 유틸 ──────────────────────────────────────────────────────────────
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -343,7 +350,7 @@
             model: model || MODEL,
             max_tokens: Math.min(MAX_OUT, Math.max(4000, maxTokens)),
             stream: true,
-            system: buildSystem(),
+            system: systemParam(buildSystem()),
             thinking: { type: "disabled" }, // 번역·정리엔 불필요(출력 과금 절감)
             output_config: { format: { type: "json_schema", schema } },
             messages: [{ role: "user", content: userText }],
@@ -444,7 +451,7 @@
             model: model || MODEL,
             max_tokens: Math.min(MAX_OUT, Math.max(300, maxTokens)),
             stream: true,
-            system: system || buildSystem(), // system 지정 시 페르소나 대신 그것을 사용(프로필 추론 등)
+            system: systemParam(system || buildSystem()), // system 지정 시 페르소나 대신 그것을 사용(프로필 추론 등)
             thinking: { type: "disabled" },
             messages: [{ role: "user", content: userText }],
           }),

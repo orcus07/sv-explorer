@@ -197,7 +197,7 @@ async function getStoryboardFor(videoId) {
   if (!videoId) return { ok: false, reason: "no_video" };
   if (sbCache.has(videoId)) return sbCache.get(videoId);
   try {
-    const r = await fetch("/api/storyboard?v=" + encodeURIComponent(videoId));
+    const r = await fetch("/api/storyboard?v=" + encodeURIComponent(videoId), { headers: appTokenHeaders() });
     const j = await r.json();
     sbCache.set(videoId, j);
     return j;
@@ -418,8 +418,64 @@ function loadArchive() {
   try { return JSON.parse(localStorage.getItem(STORE_KEY) || "[]"); }
   catch { return []; }
 }
-function saveArchive() { localStorage.setItem(STORE_KEY, JSON.stringify(archive)); }
+function saveArchive() {
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify(archive));
+    updateStorageNote();
+  } catch (e) {
+    // 대개 QuotaExceededError — localStorage(~5MB)가 꽉 참. 조용히 깨지지 않게 알린다.
+    setStatus("⚠️ 브라우저 저장공간이 꽉 찼어요. '보관함 백업(내보내기)'으로 내려받은 뒤 오래된 영상을 삭제해 정리해줘.", false);
+    const note = $("storage-note");
+    if (note) { note.textContent = "⚠️ 저장공간 초과 — 백업 후 정리 필요"; note.style.color = "var(--accent)"; }
+  }
+}
 function archiveKey(it) { return it.videoId || it.url || it.originalTitle || it.koreanTitle; }
+
+// ── 보관함 백업(내보내기/가져오기) + 저장공간 표시 ────────────────────────
+function bytesFmt(n) {
+  return n < 1024 ? n + "B" : n < 1048576 ? (n / 1024).toFixed(0) + "KB" : (n / 1048576).toFixed(1) + "MB";
+}
+function updateStorageNote() {
+  const note = $("storage-note");
+  if (!note) return;
+  let chars = 0;
+  try { chars = (localStorage.getItem(STORE_KEY) || "").length; } catch {}
+  note.style.color = "";
+  note.textContent = `보관함 ${archive.length}개 · 약 ${bytesFmt(chars * 2)} 사용 (브라우저 한도 ~5MB)`;
+}
+function exportArchive() {
+  const blob = new Blob([JSON.stringify(archive, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `yt-distill-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  setStatus(`✅ 보관함 ${archive.length}개를 백업 파일로 내려받았어요.`, false);
+}
+function importArchive(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(reader.result);
+      if (!Array.isArray(data)) throw new Error("형식이 올바르지 않아요(영상 배열이 아님).");
+      const map = new Map(archive.map((it) => [archiveKey(it), it]));
+      let added = 0;
+      for (const it of data) {
+        if (!it || typeof it !== "object") continue;
+        const k = archiveKey(it);
+        if (!map.has(k)) added++;
+        map.set(k, it); // 중복 key는 가져온 것으로 갱신
+      }
+      archive = [...map.values()];
+      saveArchive();
+      renderList();
+      setStatus(`✅ 가져오기 완료 — 새로 ${added}개 추가(중복은 갱신).`, false);
+    } catch (e) {
+      setStatus("⚠️ 가져오기 실패: " + e.message, false);
+    }
+  };
+  reader.readAsText(file);
+}
 
 function renderList() {
   const q = $("search").value.trim().toLowerCase();
@@ -922,6 +978,27 @@ function refreshKeyUI() {
   if (st) st.textContent = has ? "✅ 키 저장됨 (이 브라우저)" : "키가 아직 없습니다";
 }
 
+// ── 앱 접근 토큰 (선택; 서버가 APP_ACCESS_TOKEN 설정 시 서버 자막 수집에 필요) ──
+const APP_TOKEN_STORE = "yt-distill-app-token";
+function getAppToken() { return (localStorage.getItem(APP_TOKEN_STORE) || "").trim(); }
+function setAppToken(t) { localStorage.setItem(APP_TOKEN_STORE, (t || "").trim()); refreshAppTokenUI(); }
+function appTokenHeaders() { const t = getAppToken(); return t ? { "x-app-token": t } : {}; }
+function refreshAppTokenUI() {
+  const has = !!getAppToken();
+  const f = $("app-token");
+  if (f && document.activeElement !== f) f.value = getAppToken();
+  const st = $("apptoken-state");
+  if (st) st.textContent = has ? "✅ 토큰 저장됨 (이 브라우저)" : "토큰 없음";
+}
+// 서버가 토큰을 요구하면 입력칸을 노출한다(요구 안 하면 숨김 유지).
+async function checkServerAuth() {
+  try {
+    const r = await fetch("/api/health");
+    const j = await r.json();
+    if (j && j.tokenRequired) $("apptoken-box").classList.remove("hidden");
+  } catch { /* 서버 미응답 시 조용히 무시 */ }
+}
+
 // ── 맥락 주입 (브라우저에만 저장; 반도체 마케터 페르소나에 더해 관심사·배경을 주입) ──
 const CONTEXT_STORE = "yt-distill-context";
 function getContext() { return (localStorage.getItem(CONTEXT_STORE) || "").trim(); }
@@ -1000,10 +1077,11 @@ async function run(kind, payload) {
       logPush("자막 가져오는 중… (서버)");
       const res = await fetch("/api/transcript", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...appTokenHeaders() },
         body: JSON.stringify({ url: payload.url }),
       });
       const t = await res.json();
+      if (res.status === 401) { $("apptoken-box").classList.remove("hidden"); openDrawer(); setTimeout(() => $("app-token") && $("app-token").focus(), 250); }
       if (!res.ok || t.error) throw new Error(t.error || "자막을 가져오지 못했습니다.");
       source = t.segments ? { segments: t.segments } : { rawText: t.rawText };
       meta = { title: t.title, channel: t.channel, publishedDate: t.publishedDate, url: payload.url };
@@ -1128,6 +1206,21 @@ $("context-clear").onclick = () => {
   setStatus("맥락을 비웠어요. 기본 반도체 마케터 관점으로 돌아갑니다.", false);
 };
 
+// 앱 접근 토큰 저장
+$("apptoken-save").onclick = () => {
+  setAppToken($("app-token").value);
+  setStatus(getAppToken() ? "✅ 앱 접근 토큰을 저장했어요." : "토큰을 비웠어요.", false);
+};
+
+// 보관함 백업/가져오기
+$("export-btn").onclick = exportArchive;
+$("import-btn").onclick = () => $("import-file").click();
+$("import-file").addEventListener("change", (e) => {
+  const f = e.target.files && e.target.files[0];
+  if (f) importArchive(f);
+  e.target.value = ""; // 같은 파일 다시 선택 가능하게
+});
+
 // 내 프로필 자동 정의
 $("profile-define").onclick = () => defineProfileNow(true);
 $("profile-auto").onchange = (e) => {
@@ -1175,4 +1268,7 @@ $("delete-btn").onclick = () => {
 refreshKeyUI();
 refreshContextUI();
 refreshProfileUI();
+refreshAppTokenUI();
+updateStorageNote();
+checkServerAuth();
 renderList();
