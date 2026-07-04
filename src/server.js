@@ -31,7 +31,9 @@ if (process.env.DISABLE_CSP !== "1") {
     "img-src 'self' data: https:",
     "media-src 'self' blob: https:",
     "frame-src https://www.youtube.com https://www.youtube-nocookie.com",
-    "connect-src 'self' https://api.anthropic.com",
+    // connect-src 가 핵심 방어(데이터 전송 대상 제한). 유튜브 임베드 API가 부모 페이지에서
+    // 비콘/요청을 보낼 수 있어 유튜브 출처도 허용 — 그래도 임의 공격자 호스트로는 못 보낸다.
+    "connect-src 'self' https://api.anthropic.com https://www.youtube.com https://s.ytimg.com",
     "font-src 'self' data:",
     "base-uri 'self'",
     "form-action 'self'",
