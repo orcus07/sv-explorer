@@ -5,6 +5,16 @@
 const $ = (id) => document.getElementById(id);
 const STORE_KEY = "yt-distill-archive";
 
+// 긴 영상은 사용자가 직접 과금되므로 증류 전에 대략 비용을 알리고 확인받는다(개략치).
+const COST_CONFIRM_CHARS = 45000; // 대략 30~40분+ 영상
+function estimateCostUSD(chars) {
+  const tin = chars / 3; // 대략 입력 토큰 수(EN/KO 혼합 평균)
+  const haiku = (tin * 1 + tin * 1.3 * 5) / 1e6;         // 트랜스크립트(Haiku $1/$5, 출력≈입력×1.3)
+  const sonnet = (Math.min(chars, 40000) / 3 * 2 + 4000 * 10) / 1e6; // 구조요약(Sonnet 인트로 $2/$10)
+  const mid = haiku + sonnet;
+  return { lo: (mid * 0.7).toFixed(2), hi: (mid * 1.5).toFixed(2) };
+}
+
 let archive = loadArchive();
 let current = null;
 let ytPlayer = null;
@@ -191,7 +201,10 @@ function jumpToChapter(item, sec) {
 const sbCache = new Map(); // videoId → /api/storyboard 응답(캐시)
 let _capBlob = null;       // 현재 캡쳐 PNG(다운로드/복사용)
 
-function proxyImg(ytUrl) { return "/api/sb-image?u=" + encodeURIComponent(ytUrl); }
+function proxyImg(ytUrl) {
+  const t = getAppToken(); // <img> 는 헤더를 못 붙이므로 토큰은 쿼리로
+  return "/api/sb-image?u=" + encodeURIComponent(ytUrl) + (t ? "&token=" + encodeURIComponent(t) : "");
+}
 
 async function getStoryboardFor(videoId) {
   if (!videoId) return { ok: false, reason: "no_video" };
@@ -1095,6 +1108,18 @@ async function run(kind, payload) {
       videoId = payload.url ? YTDistill.parseVideoId(payload.url) : null;
       via = "paste";
       logPush(`✓ 붙여넣은 자막 확보 (${payload.text.length.toLocaleString()}자) → 증류 시작`, "ok");
+    }
+    // 긴 영상은 네 API 비용이 커질 수 있어 미리 대략치를 알리고 확인받는다.
+    const approxChars = source.segments
+      ? source.segments.reduce((a, s) => a + (s.text || "").length, 0)
+      : (source.rawText || "").length;
+    if (approxChars > COST_CONFIRM_CHARS) {
+      const est = estimateCostUSD(approxChars);
+      const ok = window.confirm(
+        `이 영상은 길어요 (약 ${approxChars.toLocaleString()}자).\n` +
+        `증류에 대략 $${est.lo}~$${est.hi} 정도의 네 Anthropic API 비용이 들 수 있어요(개략 추정).\n\n계속할까요?`,
+      );
+      if (!ok) { logPush("사용자가 취소했어요(긴 영상 비용 확인).", "warn"); return; }
     }
     // 무거운 Claude 호출은 브라우저가 본인 키로 직접 (Render→Anthropic 끊김 우회)
     const result = await YTDistill.distill(
