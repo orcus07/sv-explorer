@@ -1,5 +1,5 @@
 // 유튜브 트랜스크립트 · 구조 증류 리더 — 프론트엔드.
-// 링크/붙여넣기 → 서버 증류 → 화면 렌더 + 보관함(localStorage).
+// 링크/붙여넣기 → 서버 증류 → 화면 렌더 + 보관함(IndexedDB, 설정값은 localStorage).
 // 타임스탬프 클릭 → sticky 임베드 플레이어 점프 + 해당 트랜스크립트 위치로 스크롤.
 
 const $ = (id) => document.getElementById(id);
@@ -15,7 +15,7 @@ function estimateCostUSD(chars) {
   return { lo: (mid * 0.7).toFixed(2), hi: (mid * 1.5).toFixed(2) };
 }
 
-let archive = loadArchive();
+let archive = []; // loadArchive()가 비동기(IndexedDB)라 초기화에서 채운다
 let current = null;
 let ytPlayer = null;
 let ytReady = false;
@@ -426,35 +426,125 @@ async function copyCapture() {
   }
 }
 
-// ── 보관함 ──────────────────────────────────────────────────────────────
-function loadArchive() {
-  try { return JSON.parse(localStorage.getItem(STORE_KEY) || "[]"); }
-  catch { return []; }
+// ── 보관함 저장 (IndexedDB — localStorage 5MB 한도·쓰기 증폭 해소) ──────────
+// in-memory `archive` 배열이 진실의 원천(동기 읽기 유지). 영속화만 IndexedDB로 옮긴다.
+// 기존 localStorage 보관함은 첫 로드 때 자동 이관. IDB 불가 브라우저는 localStorage 폴백.
+const DB_NAME = "yt-distill", DB_STORE = "items";
+let _db = null;
+let _useIDB = true; // IDB 열기 실패(구형·프라이빗 모드) 시 false → localStorage 폴백
+
+function archiveKey(it) { return it.videoId || it.url || it.originalTitle || it.koreanTitle; }
+function keyFor(it) { return archiveKey(it) || ("ord-" + (it._ord || 0)); } // IDB 키(빈 키 방지)
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    if (!("indexedDB" in window)) return reject(new Error("no-indexeddb"));
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(DB_STORE)) db.createObjectStore(DB_STORE);
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error || new Error("idb open failed"));
+  });
 }
-function saveArchive() {
+function idbGetAll() {
+  return new Promise((resolve, reject) => {
+    const r = _db.transaction(DB_STORE, "readonly").objectStore(DB_STORE).getAll();
+    r.onsuccess = () => resolve(r.result || []);
+    r.onerror = () => reject(r.error);
+  });
+}
+function idbPut(item) {
+  return new Promise((resolve, reject) => {
+    const tx = _db.transaction(DB_STORE, "readwrite");
+    tx.objectStore(DB_STORE).put(item, keyFor(item));
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+function idbDelete(key) {
+  return new Promise((resolve, reject) => {
+    const tx = _db.transaction(DB_STORE, "readwrite");
+    tx.objectStore(DB_STORE).delete(key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+function idbBulk(items) {
+  return new Promise((resolve, reject) => {
+    const tx = _db.transaction(DB_STORE, "readwrite");
+    const s = tx.objectStore(DB_STORE);
+    s.clear();
+    for (const it of items) s.put(it, keyFor(it));
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+function readLegacyArchive() {
+  try { return JSON.parse(localStorage.getItem(STORE_KEY) || "[]"); } catch { return []; }
+}
+function legacySaveAll() { localStorage.setItem(STORE_KEY, JSON.stringify(archive)); }
+
+async function loadArchive() {
   try {
-    localStorage.setItem(STORE_KEY, JSON.stringify(archive));
-    updateStorageNote();
+    _db = await openDB();
+    _useIDB = true;
+    let items = await idbGetAll();
+    if (!items.length) {
+      // 최초 1회: 기존 localStorage 보관함을 IDB로 이관하고 원본 키는 비워 공간을 확보한다.
+      const legacy = readLegacyArchive();
+      if (legacy.length) {
+        legacy.forEach((it, i) => { if (it._ord == null) it._ord = legacy.length - i; });
+        await idbBulk(legacy);
+        try { localStorage.removeItem(STORE_KEY); } catch {}
+        items = legacy;
+      }
+    }
+    items.sort((a, b) => (b._ord || 0) - (a._ord || 0)); // 최신(높은 _ord)이 앞
+    return items;
   } catch (e) {
-    // 대개 QuotaExceededError — localStorage(~5MB)가 꽉 참. 조용히 깨지지 않게 알린다.
-    setStatus("⚠️ 브라우저 저장공간이 꽉 찼어요. '보관함 백업(내보내기)'으로 내려받은 뒤 오래된 영상을 삭제해 정리해줘.", false);
-    const note = $("storage-note");
-    if (note) { note.textContent = "⚠️ 저장공간 초과 — 백업 후 정리 필요"; note.style.color = "var(--accent)"; }
+    _useIDB = false; // IDB 불가 → localStorage 폴백(기존 동작 유지)
+    return readLegacyArchive();
   }
 }
-function archiveKey(it) { return it.videoId || it.url || it.originalTitle || it.koreanTitle; }
+
+function warnStorageFull() {
+  setStatus("⚠️ 저장에 실패했어요(저장공간 부족일 수 있음). '보관함 백업(내보내기)' 후 오래된 영상을 삭제해줘.", false);
+  const note = $("storage-note");
+  if (note) { note.textContent = "⚠️ 저장 실패 — 백업 후 정리 필요"; note.style.color = "var(--accent)"; }
+}
+// 단일 항목 저장(핫패스: 새 증류·챕터 상세·2차 명령) — 전체 재직렬화 없이 그 항목만 쓴다(쓰기 증폭 해소).
+async function saveItem(item) {
+  try { if (_useIDB) await idbPut(item); else legacySaveAll(); updateStorageNote(); }
+  catch (e) { warnStorageFull(); }
+}
+async function removeItem(key) {
+  try { if (_useIDB) await idbDelete(key); else legacySaveAll(); updateStorageNote(); }
+  catch (e) { warnStorageFull(); }
+}
+// 전체 저장(가져오기 등 대량 변경 시). 기존 saveArchive 호출부 호환용 별칭.
+async function saveArchive() {
+  try { if (_useIDB) await idbBulk(archive); else legacySaveAll(); updateStorageNote(); }
+  catch (e) { warnStorageFull(); }
+}
 
 // ── 보관함 백업(내보내기/가져오기) + 저장공간 표시 ────────────────────────
 function bytesFmt(n) {
   return n < 1024 ? n + "B" : n < 1048576 ? (n / 1024).toFixed(0) + "KB" : (n / 1048576).toFixed(1) + "MB";
 }
-function updateStorageNote() {
+async function updateStorageNote() {
   const note = $("storage-note");
   if (!note) return;
-  let chars = 0;
-  try { chars = (localStorage.getItem(STORE_KEY) || "").length; } catch {}
+  let extra = "";
+  try {
+    if (navigator.storage && navigator.storage.estimate) {
+      const est = await navigator.storage.estimate();
+      if (est && est.usage != null) extra = ` · 약 ${bytesFmt(est.usage)} 사용`;
+    }
+  } catch {}
   note.style.color = "";
-  note.textContent = `보관함 ${archive.length}개 · 약 ${bytesFmt(chars * 2)} 사용 (브라우저 한도 ~5MB)`;
+  note.textContent = `보관함 ${archive.length}개${extra}` + (_useIDB ? "" : " (localStorage 폴백)");
 }
 function exportArchive() {
   const blob = new Blob([JSON.stringify(archive, null, 2)], { type: "application/json" });
@@ -480,6 +570,8 @@ function importArchive(file) {
         map.set(k, it); // 중복 key는 가져온 것으로 갱신
       }
       archive = [...map.values()];
+      const base = Date.now();
+      archive.forEach((it, i) => { it._ord = base - i; }); // 현재 배열 순서를 재로드 후에도 유지
       saveArchive();
       renderList();
       setStatus(`✅ 가져오기 완료 — 새로 ${added}개 추가(중복은 갱신).`, false);
@@ -515,8 +607,9 @@ function renderList() {
 function upsertArchive(item) {
   const key = archiveKey(item);
   archive = archive.filter((it) => archiveKey(it) !== key);
+  item._ord = Date.now(); // 최신 → 맨 앞(재로드 후에도 유지)
   archive.unshift(item);
-  saveArchive();
+  saveItem(item); // 그 항목만 저장(전체 재직렬화 없음)
   renderList();
 }
 
@@ -859,7 +952,7 @@ function renderChapters(item) {
             apiKey, context: getContext(),
           });
           item.chapterDetails[i] = ans;
-          saveArchive();
+          saveItem(item);
           paint();
         } catch (e) {
           detail.innerHTML = `<p class="muted">⚠️ ${esc(e.message)}<br>버튼을 다시 누르면 재시도해요.</p>`;
@@ -936,7 +1029,7 @@ function renderFollowups(item) {
     del.textContent = "삭제";
     del.onclick = () => {
       item.followups = (item.followups || []).filter((x) => x !== f);
-      saveArchive();
+      saveItem(item);
       renderFollowups(item);
     };
     card.append(q, a, del);
@@ -964,7 +1057,7 @@ async function runFollowup() {
     });
     current.followups = current.followups || [];
     current.followups.unshift({ q: instruction, a: ans });
-    saveArchive();
+    saveItem(current);
     renderFollowups(current);
     input.value = "";
     logPush("완료 · 결과를 추가했어요", "done");
@@ -1281,8 +1374,9 @@ window.addEventListener("scroll", () => {
 $("to-top").onclick = () => window.scrollTo({ top: 0, behavior: "smooth" });
 $("delete-btn").onclick = () => {
   if (!current) return;
-  archive = archive.filter((it) => archiveKey(it) !== archiveKey(current));
-  saveArchive();
+  const key = archiveKey(current);
+  archive = archive.filter((it) => archiveKey(it) !== key);
+  removeItem(key); // 그 항목만 삭제
   renderList();
   $("result").classList.add("hidden");
   $("empty-state").classList.remove("hidden");
@@ -1294,6 +1388,10 @@ refreshKeyUI();
 refreshContextUI();
 refreshProfileUI();
 refreshAppTokenUI();
-updateStorageNote();
 checkServerAuth();
-renderList();
+// 보관함은 IndexedDB에서 비동기 로드(최초 1회 localStorage 자동 이관) 후 렌더.
+(async function initArchive() {
+  archive = await loadArchive();
+  renderList();
+  updateStorageNote();
+})();
