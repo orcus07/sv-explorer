@@ -890,6 +890,17 @@ function renderMarkdown(md) {
   return html;
 }
 
+/** 요약을 "첫 문장(리드) + 나머지"로 나눈다 — 리드를 별도 문단으로 앞세워 훑어볼 때
+ *  TL;DR이 먼저 들어오고, 부연은 뒤에 놓이게 한다.
+ *  리드가 아주 길면(120자 초과) 나누는 의미가 없으므로 통짜 본문으로 둔다.
+ *  마침표 뒤 공백을 요구해 소수점("1.5배")에서 잘못 끊기지 않게 한다. */
+function splitLead(text) {
+  const t = (text || "").trim();
+  if (!t) return { lead: "", rest: "" };
+  const m = t.match(/^([\s\S]{15,120}?[.!?])\s+([\s\S]+)$/);
+  return m ? { lead: m[1], rest: m[2] } : { lead: t, rest: "" };
+}
+
 /** 구조 요약(챕터) 렌더 + 각 챕터의 "🔍 자세히"(2차 상세) 버튼. */
 function renderChapters(item) {
   const chEl = $("r-chapters");
@@ -904,24 +915,40 @@ function renderChapters(item) {
     const li = document.createElement("li");
     li.className = "chapter";
     li.id = "ch-" + i; // 트랜스크립트 → 챕터 역방향 점프 대상
+    // 헤더 줄: 타임스탬프 칩 + 제목. 요약은 그 아래 전체 폭으로 → 좁은 화면에서 칩 폭만큼
+    // 들여쓰기되어 줄폭을 버리던 문제 해소(상세 박스와 같은 왼쪽 기준선).
+    const head = document.createElement("div");
+    head.className = "c-head";
     const ts = document.createElement("button");
     ts.className = "ts";
     ts.textContent = ch.timestamp || fmtTime(ch.seconds);
     ts.onclick = () => { if (hasVideo) seekTo(ch.seconds); scrollToTranscript(ch.seconds); };
+    const title = document.createElement("strong");
+    title.className = "c-title";
+    title.textContent = ch.heading || "";
+    head.append(ts, title);
 
-    const body = document.createElement("div");
-    body.className = "c-body";
-    const head = document.createElement("strong"); head.textContent = ch.heading || "";
-    const sum = document.createElement("span"); sum.className = "muted small"; sum.textContent = ch.summary || "";
-    body.append(head, sum);
+    // 요약: 첫 문장을 리드 문단으로 앞세우고, 부연은 그 아래 별도 문단으로 — 요약 먼저, 상세 뒤.
+    const { lead, rest } = splitLead(ch.summary || "");
+    let leadEl = null, sum = null;
+    if (lead) {
+      leadEl = document.createElement("p");
+      leadEl.className = "c-lead";
+      leadEl.textContent = lead;
+    }
+    if (rest) {
+      sum = document.createElement("p");
+      sum.className = "c-sum";
+      sum.textContent = rest;
+    }
 
-    // 상세 박스는 챕터 행(칩+본문) 밖, 전체 폭으로 빼서 가독성 확보(아래 li.append).
+    // 상세는 요약 뒤에 전체 폭으로 — 요약(리드)이 먼저, 깊은 내용은 접힌 채 뒤에.
     const detail = canDetail ? document.createElement("div") : null;
+    const btn = canDetail ? document.createElement("button") : null;
     if (canDetail) {
       const startSec = ch.seconds || 0;
       const endSec = i + 1 < chapters.length ? (chapters[i + 1].seconds || null) : null;
       detail.className = "chapter-detail md hidden";
-      const btn = document.createElement("button");
       btn.className = "link-btn detail-btn";
 
       const paint = () => {
@@ -959,11 +986,13 @@ function renderChapters(item) {
           btn.textContent = "🔁 다시 시도";
         } finally { btn.disabled = false; }
       };
-      body.append(btn);
       paint();
     }
 
-    li.append(ts, body);
+    li.append(head);
+    if (leadEl) li.append(leadEl);
+    if (sum) li.append(sum);
+    if (canDetail) li.append(btn);
     if (detail) li.append(detail);
     chEl.appendChild(li);
   });

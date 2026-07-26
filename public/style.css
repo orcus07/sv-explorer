@@ -4,6 +4,7 @@
   --surface-2: #f0f2f5;
   --border: #e4e7ec;
   --text: #1a1d24;
+  --text-2: #414653;       /* 본문 보조(요약 문단) — muted보다 진해 길게 읽어도 편함 */
   --muted: #6b7280;
   --accent: #e5352b;       /* 브랜드(유튜브 레드) */
   --link: #2563eb;         /* 타임스탬프·링크 */
@@ -215,17 +216,24 @@ body {
 }
 .ts:hover { border-color: var(--link); background: #eff4ff; }
 
+/* 챕터: 헤더 줄(칩+제목)만 가로 배치하고, 요약·상세는 전체 폭으로 아래에 쌓는다.
+   (요약을 칩 옆에 두면 좁은 화면에서 칩 폭만큼 줄폭을 버려 가독성이 나빠진다) */
 .chapters { list-style: none; padding: 0; }
-.chapter { display: flex; flex-wrap: wrap; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--border); }
+.chapter { padding: 14px 0; border-bottom: 1px solid var(--border); }
 .chapter:last-child { border-bottom: none; }
-.chapter .c-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
-.chapter .c-body strong { display: block; }
+.c-head { display: flex; gap: 10px; align-items: flex-start; }
+.c-head .ts { margin-top: 2px; }
+.c-title { font-size: 16.5px; line-height: 1.45; }
+/* 요약은 이제 3~5문장 — muted·small 대신 본문급 가독성으로.
+   리드(첫 문장)를 별도 문단으로 앞세워 훑어볼 때 TL;DR이 먼저 들어오게 한다. */
+.c-lead { margin: 8px 0 0; font-size: 15.5px; line-height: 1.7; color: var(--text); font-weight: 500; }
+.c-sum { margin: 5px 0 0; font-size: 14.5px; line-height: 1.75; color: var(--text-2); }
 
-/* 챕터 상세(2차) — 칩 indent를 벗어나 행 전체 폭으로(가독성) */
-.detail-btn { align-self: flex-start; margin-top: 4px; font-size: 12.5px; }
+/* 챕터 상세(2차) — 요약 뒤, 같은 왼쪽 기준선의 전체 폭 박스 */
+.detail-btn { margin-top: 8px; font-size: 12.5px; }
 .chapter-detail {
-  flex-basis: 100%; width: 100%;
-  margin-top: 4px; padding: 14px 16px;
+  width: 100%;
+  margin-top: 8px; padding: 14px 16px;
   background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px;
 }
 
