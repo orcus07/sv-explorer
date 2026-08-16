@@ -14,7 +14,11 @@
   const API_URL = "https://api.anthropic.com/v1/messages";
   const MODEL = "claude-haiku-4-5"; // 트랜스크립트(번역·정리) — 가장 저렴(입력 $1·출력 $5/1M)
   const STRUCT_MODEL = "claude-sonnet-5"; // 구조 요약(시사점·마케터 관점·챕터)만 상위 모델로 — 인사이트 품질↑
-  const MAX_OUT = 16000; // 호출당 max_tokens 상한
+  const MAX_OUT = 16000; // 일반 호출의 max_tokens(트랜스크립트 청크·2차 명령)
+  // 구조 요약은 한 번의 호출로 목차 전체(챕터마다 3~5문장)+시사점+용어+인용을 만든다.
+  // 16000으로는 예산이 모자라 모델이 챕터 수를 스스로 줄여 목차가 중간에서 끊겼다.
+  const STRUCT_MAX_OUT = 32000;
+  const MODEL_MAX_OUT = 64000; // 모델 출력 상한 가드(Sonnet 5는 128K까지 가능하나 보수적으로)
   const SINGLE_PASS_BUDGET = 12000; // 예상 출력이 이 토큰을 넘으면 분할
   const CHUNK_CHARS = 8000; // 분할 시 청크당 원문 문자 수(라틴 기준 상한; CJK는 더 작게 자동 조정)
   const CHUNK_OUT_BUDGET = 11000; // 청크당 목표 출력 토큰(16000 상한 대비 여유)
@@ -356,7 +360,7 @@
           },
           body: JSON.stringify({
             model: model || MODEL,
-            max_tokens: Math.min(MAX_OUT, Math.max(4000, maxTokens)),
+            max_tokens: Math.min(MODEL_MAX_OUT, Math.max(4000, maxTokens)),
             stream: true,
             system: systemParam(buildSystem()),
             thinking: { type: "disabled" }, // 번역·정리엔 불필요(출력 과금 절감)
@@ -530,24 +534,59 @@
     }
   }
 
+  // 자막 텍스트(`[초] 본문` 줄)에서 마지막 시점을 찾아 영상 길이를 가늠한다.
+  function lastSeconds(text) {
+    let last = 0;
+    const re = /^\[(\d+)\]/gm;
+    let m;
+    while ((m = re.exec(text)) !== null) { const n = Number(m[1]); if (n > last) last = n; }
+    return last;
+  }
+
+  // 목차가 영상 앞부분만 덮고 끊기는 것을 막는다 — 끝 지점을 알려주고 전 구간 커버를 요구.
+  // 단일 패스·분할(구조 요약) 양쪽에서 같은 지시를 쓴다.
+  function buildCoverageNote(transcriptText, isRaw) {
+    const endSec = isRaw ? 0 : lastSeconds(transcriptText);
+    if (!endSec) return "";
+    return `\n\n[목차 커버리지 — 중요] 이 영상은 약 ${fmtTimestamp(endSec)}(${endSec}초) 지점까지 이어진다. ` +
+      `chapters는 시작부터 끝(${fmtTimestamp(endSec)} 부근)까지 **영상 전 구간**을 순서대로 덮어야 하며, 마지막 챕터의 seconds는 영상 끝에 가까워야 한다. ` +
+      `목차가 중간에서 끊기면 안 된다. 분량이 빠듯하면 각 챕터 요약을 조금 줄여서라도 전 구간 커버를 우선하라.`;
+  }
+
   // ── 구조 요약(독립 작업) ───────────────────────────────────────────────
   async function runStructure(transcriptText, hdr, isRaw, meta) {
     const structureText = downsample(transcriptText, STRUCTURE_INPUT_CAP);
     const sampledNote = structureText.length < transcriptText.length
       ? "\n(주의: 아래는 긴 영상이라 전체에서 고르게 뽑은 대표 발췌다. 타임스탬프는 전 구간에 퍼져 있으니 목차는 영상 흐름을 대표하도록 작성하고, 발췌 사이 공백을 걱정하지 마라.)"
       : "";
-    const userText = isRaw
-      ? `${hdr}\n\n아래는 유튜브 영상 페이지에서 자동 추출한 텍스트다(정밀 타임스탬프 없음).${sampledNote} 실제 자막 본문이 있으면 구조 요약(제목·맥락·핵심 시사점·마케터 관점·타임스탬프 목차·핵심 용어·주요 인용)을 작성하고, 메타데이터뿐이면 chapters는 빈 배열로 둬라. (본문 트랜스크립트는 별도 처리하므로 여기선 만들지 마라.)\n\n---\n${structureText}`
-      : `${hdr}\n\n아래는 긴 유튜브 영상의 자막이다. 각 줄 앞 [숫자]는 시작 시점(초)이다.${sampledNote}\n구조 요약(제목·맥락·핵심 시사점·마케터 관점·타임스탬프 목차·핵심 용어·주요 인용)을 작성해줘. (본문 트랜스크립트는 별도로 처리하므로 여기서는 만들지 마라.)\n\n---\n${structureText}`;
+    const coverageNote = buildCoverageNote(transcriptText, isRaw);
+    const userText = (isRaw
+      ? `${hdr}\n\n아래는 유튜브 영상 페이지에서 자동 추출한 텍스트다(정밀 타임스탬프 없음).${sampledNote} 실제 자막 본문이 있으면 구조 요약(제목·맥락·핵심 시사점·마케터 관점·타임스탬프 목차·핵심 용어·주요 인용)을 작성하고, 메타데이터뿐이면 chapters는 빈 배열로 둬라. (본문 트랜스크립트는 별도 처리하므로 여기선 만들지 마라.)`
+      : `${hdr}\n\n아래는 긴 유튜브 영상의 자막이다. 각 줄 앞 [숫자]는 시작 시점(초)이다.${sampledNote}\n구조 요약(제목·맥락·핵심 시사점·마케터 관점·타임스탬프 목차·핵심 용어·주요 인용)을 작성해줘. (본문 트랜스크립트는 별도로 처리하므로 여기서는 만들지 마라.)`
+    ) + coverageNote + `\n\n---\n${structureText}`;
     try {
       // 구조 요약만 상위 모델(Sonnet)로 — 인사이트 품질↑. 과부하로 막히면 Haiku로 폴백.
-      const structure = await callJson({ schema: STRUCTURE_SCHEMA, maxTokens: MAX_OUT, model: STRUCT_MODEL, userText });
+      const structure = await callJson({ schema: STRUCTURE_SCHEMA, maxTokens: STRUCT_MAX_OUT, model: STRUCT_MODEL, userText });
       return { structure, structureFailed: false };
     } catch (err) {
+      // 출력 한도 초과(JSON이 잘림) → 구조를 통째로 버리지 말고 요약을 짧게 해서 한 번 더.
+      // 목차 커버리지(전 구간)를 지키는 쪽이 요약 길이보다 중요하다.
+      if (err && err.overflow) {
+        try {
+          _progress("구조 요약이 출력 한도를 넘어 잘렸어요 — 요약을 짧게 해서 재시도…");
+          const leaner = userText.replace(
+            "---\n",
+            "[분량 조정] 앞선 시도가 출력 한도를 넘겼다. 각 챕터 summary를 2~3문장으로 줄이되, " +
+            "챕터 개수와 전 구간 커버리지는 그대로 유지하라.\n\n---\n",
+          );
+          const structure = await callJson({ schema: STRUCTURE_SCHEMA, maxTokens: STRUCT_MAX_OUT, model: STRUCT_MODEL, userText: leaner });
+          return { structure, structureFailed: false };
+        } catch (_) { /* 그래도 실패 → 아래 최소 구조 */ }
+      }
       if (/overloaded|overload|429|503|529/i.test((err && err.message) || "") || isModelError(err)) {
         try {
           _progress(isModelError(err) ? "구조 요약 모델 ID 오류 — Haiku로 폴백 재시도…" : "구조 요약 혼잡 — Haiku로 폴백 재시도…");
-          const structure = await callJson({ schema: STRUCTURE_SCHEMA, maxTokens: MAX_OUT, model: MODEL, userText });
+          const structure = await callJson({ schema: STRUCTURE_SCHEMA, maxTokens: STRUCT_MAX_OUT, model: MODEL, userText });
           return { structure, structureFailed: false };
         } catch (_) { /* 폴백도 실패 → 아래 최소 구조 */ }
       }
@@ -627,9 +666,12 @@
         ? `${hdr}\n\n아래는 유튜브 영상 페이지에서 자동 추출한 텍스트다(리더 프록시 결과, 정밀 타임스탬프 없음).\n` +
           `- 실제 발화(음성) 자막 본문이 들어 있으면 그것을 문단 단위 한글·원문 병기 트랜스크립트로 충실히 정리하고, timestamp는 ""·seconds는 0으로 둬라.\n` +
           `- 실제 자막 본문이 없고 제목·설명·댓글·관련영상 같은 메타데이터뿐이면, transcript와 chapters는 반드시 빈 배열([])로 두고 변명·설명 문구를 거기에 넣지 마라. 그 경우 oneLiner·topic·keyTakeaways는 확보된 정보 범위에서 작성하되, 내용이 영상 설명 기반임을 topic 끝에 한 문장으로 밝혀라.\n\n---\n${transcriptText}`
-        : `${hdr}\n\n아래는 유튜브 영상 자막이다. 각 줄 앞 [숫자]는 시작 시점(초)이다.\n위 원칙에 따라 구조 요약과 한글·원문 병기 트랜스크립트로 정리해줘.\n\n---\n${transcriptText}`;
+        : `${hdr}\n\n아래는 유튜브 영상 자막이다. 각 줄 앞 [숫자]는 시작 시점(초)이다.\n위 원칙에 따라 구조 요약과 한글·원문 병기 트랜스크립트로 정리해줘.` +
+          buildCoverageNote(transcriptText, isRaw) + `\n\n---\n${transcriptText}`;
       try {
-        return await callJson({ schema: FULL_SCHEMA, maxTokens: MAX_OUT, userText });
+        // 단일 패스는 트랜스크립트와 목차를 한 번에 만든다. 예산이 빠듯하면 분량이 큰
+        // 트랜스크립트가 예산을 먹고 목차가 중간에서 끊기므로 넉넉히 준다(생성한 만큼만 과금).
+        return await callJson({ schema: FULL_SCHEMA, maxTokens: STRUCT_MAX_OUT, userText });
       } catch (err) {
         if (!err || !err.overflow) throw err;
         onProgress("단일 패스 출력이 한도를 넘어 — 구간 분할 방식으로 전환…");
