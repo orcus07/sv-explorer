@@ -516,6 +516,7 @@ function warnStorageFull() {
 }
 // 단일 항목 저장(핫패스: 새 증류·챕터 상세·2차 명령) — 전체 재직렬화 없이 그 항목만 쓴다(쓰기 증폭 해소).
 async function saveItem(item) {
+  window.PensieveSync?.queue([item]);
   try { if (_useIDB) await idbPut(item); else legacySaveAll(); updateStorageNote(); }
   catch (e) { warnStorageFull(); }
 }
@@ -525,6 +526,7 @@ async function removeItem(key) {
 }
 // 전체 저장(가져오기 등 대량 변경 시). 기존 saveArchive 호출부 호환용 별칭.
 async function saveArchive() {
+  window.PensieveSync?.queue(archive);
   try { if (_useIDB) await idbBulk(archive); else legacySaveAll(); updateStorageNote(); }
   catch (e) { warnStorageFull(); }
 }
@@ -1419,8 +1421,10 @@ refreshProfileUI();
 refreshAppTokenUI();
 checkServerAuth();
 // 보관함은 IndexedDB에서 비동기 로드(최초 1회 localStorage 자동 이관) 후 렌더.
+addEventListener('pensieve-archive-request', () => window.PensieveSync?.queue(archive));
 (async function initArchive() {
   archive = await loadArchive();
+  window.PensieveSync?.queue(archive);
   renderList();
   updateStorageNote();
 })();
