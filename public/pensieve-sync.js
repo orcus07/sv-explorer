@@ -64,14 +64,20 @@
     }).then(flush).catch(()=>say('서재 전송 대기열 저장 실패 · 원래 리더 보관함은 유지됩니다.'));
   }
   window.PensieveSync={queue};
+  function connect({endpoint,token}) {
+    const u=new URL(endpoint);
+    if(u.origin!=='https://laptop-6lmt6gii.tailcb76be.ts.net'||u.pathname!=='/reader-sync'||u.search||u.hash||typeof token!=='string'||token.length<32)throw Error('Invalid connection');
+    connection={endpoint,token};localStorage.setItem(KEY,JSON.stringify(connection));
+  }
+  // Same-tab handoff works without popup permission or an opener reference.
+  if(location.hash.startsWith('#pensieve-connect=')){
+    const fragment=location.hash.slice('#pensieve-connect='.length);
+    history.replaceState(null,'',location.pathname+location.search);
+    try{connect(JSON.parse(decodeURIComponent(fragment)));}catch{say('연결 설정을 저장하지 못했습니다. 서재에서 다시 연결해주세요.');}
+  }
   addEventListener('message',event=>{
     if(event.origin!==LIBRARY||event.source!==window.opener||event.data?.type!=='pensieve-reader-connect')return;
-    const {endpoint,token}=event.data;
-    try{
-      const u=new URL(endpoint);
-      if(u.origin!=='https://laptop-6lmt6gii.tailcb76be.ts.net'||u.pathname!=='/reader-sync'||u.search||u.hash||typeof token!=='string'||token.length<32)return;
-      connection={endpoint,token};localStorage.setItem(KEY,JSON.stringify(connection));
-      event.source.postMessage({type:'pensieve-reader-connected'},LIBRARY);
+    try{connect(event.data);event.source.postMessage({type:'pensieve-reader-connected'},LIBRARY);
       window.dispatchEvent(new Event('pensieve-archive-request'));
     }catch{say('연결 설정을 저장할 수 없습니다.');}
   });
