@@ -65,6 +65,7 @@
   <div id="scrim" class="scrim hidden"></div>
 
   <main class="page">
+    <p id="pensieve-sync-status" class="muted small" role="status"></p>
     <div class="sub-row">
       <button id="toggle-context" class="link-btn">🎯 맥락 추가</button>
       <button id="toggle-paste" class="link-btn">자막이 막히면 → 자막 직접 붙여넣기</button>
@@ -74,7 +75,7 @@
     <div id="context-box" class="paste-box hidden">
       <label for="context-text" class="muted small">
         관심사·배경을 적으면 <b>핵심 시사점·마케터 관점</b>이 그 쪽으로 더 날카로워집니다.
-        (페르소나는 <b>반도체 마케터</b>로 고정) — 이 브라우저에 저장돼 다음 영상에도 자동 적용됩니다.
+        기본은 반도체 마케터 관점입니다. 서재에서 연 작업에는 전달된 서재 관점이 적용됩니다. 저장 버튼은 독립 실행의 기본 맥락을 바꿉니다.
       </label>
       <textarea id="context-text" rows="3" placeholder="예: 나는 HBM 영업 담당이라 경쟁사 HBM 로드맵·고객 채택 신호에 특히 관심. 다음 주 고객 미팅 준비 중."></textarea>
       <div class="key-actions">
@@ -143,7 +144,7 @@
           </section>
 
           <section class="block" id="angle-block">
-            <h3>📌 반도체 마케터 관점 <span id="r-relevance" class="relevance"></span></h3>
+            <h3>📌 <span id="r-angle-label">반도체 마케터 관점</span> <span id="r-relevance" class="relevance"></span></h3>
             <ul id="r-angle"></ul>
             <p id="r-angle-none" class="muted small hidden">이 영상은 반도체·AI 마케팅과 직접 연관은 약해요.</p>
           </section>
@@ -174,7 +175,7 @@
           </section>
 
           <section class="block" id="followup-block">
-            <h3>💬 2차 명령 <span class="muted small">이 영상을 근거로 더 캐묻기 (반도체 마케터 관점 유지)</span></h3>
+            <h3>💬 2차 명령 <span class="muted small">이 영상을 근거로 더 캐묻기 (이 영상의 관점 유지)</span></h3>
             <div class="followup-box">
               <textarea id="followup-input" rows="2" placeholder="예: 3번째 챕터 더 상세히 / 마케터 관점만 더 깊게 / 경쟁사·HBM 언급만 모아줘  (Ctrl+Enter로 실행)"></textarea>
               <button id="followup-run" class="btn btn-primary small-btn">실행</button>
@@ -216,9 +217,8 @@
 
   <button id="to-top" class="to-top hidden" aria-label="맨 위로">⤒</button>
 
-  <script src="distill.js"></script>
-  <p id="pensieve-sync-status" class="muted small" role="status"></p>
-  <script src="pensieve-sync.js?v=2"></script>
-  <script src="app.js?v=pensieve1"></script>
+  <script src="distill.js?v=library-launch-1"></script>
+  <script src="pensieve-sync.js?v=library-launch-1"></script>
+  <script src="app.js?v=library-launch-1"></script>
 </body>
 </html>

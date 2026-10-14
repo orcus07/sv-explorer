@@ -630,6 +630,7 @@ function fmtTime(sec) {
 // ── 렌더링 ──────────────────────────────────────────────────────────────
 function show(item) {
   current = item;
+  $("r-angle-label").textContent=item._pensieveLaunch ? "서재 관점" : "반도체 마케터 관점";
   $("empty-state").classList.add("hidden");
   $("result").classList.remove("hidden");
   $("transcript-search").value = ""; // 새 영상 → 이전 검색어 초기화(트랜스크립트 렌더 전에)
@@ -666,6 +667,7 @@ function show(item) {
   relEl.className = `relevance rel-${rel}`;
   const notes = item.marketerAngle?.notes || [];
   fillList("r-angle", notes);
+  $("r-angle-none").textContent=item._pensieveLaunch ? "이 자료와 서재 관점의 직접 연결은 약해요." : "이 영상은 반도체·AI 마케팅과 직접 연관은 약해요.";
   $("r-angle-none").classList.toggle("hidden", notes.length > 0);
 
   // 구조 요약(챕터) — 각 챕터에 "🔍 자세히"(2차 상세) 버튼 포함
@@ -977,8 +979,8 @@ function renderChapters(item) {
         btn.disabled = true; btn.textContent = "⏳ 작성 중…";
         try {
           const ans = await YTDistill.followUp({
-            instruction: DETAIL_INSTRUCTION, sourceText: src, scope: ch.heading,
-            apiKey, context: getContext(),
+            instruction: item._pensieveLaunch ? DETAIL_INSTRUCTION.replace("반도체 마케터(AI 동향) 관점", "이 영상에 적용된 서재 관점") : DETAIL_INSTRUCTION, sourceText: src, scope: ch.heading,
+            apiKey, context: item.perspective || getContext(), libraryPerspective: !!item._pensieveLaunch,
           });
           item.chapterDetails[i] = ans;
           saveItem(item);
@@ -1083,7 +1085,7 @@ async function runFollowup() {
   logPush("시작 — " + instruction);
   try {
     const ans = await YTDistill.followUp({
-      instruction, sourceText: src, apiKey, context: getContext(),
+      instruction, sourceText: src, apiKey, context: current.perspective || getContext(), libraryPerspective: !!current._pensieveLaunch,
       onProgress: (m) => logPush(m),
     });
     current.followups = current.followups || [];
@@ -1197,7 +1199,8 @@ async function defineProfileNow(explicit) {
 }
 
 // ── 요청: 서버는 자막만, Claude 호출은 브라우저가 직접 ────────────────────
-async function run(kind, payload) {
+async function run(kind, payload, launch = window.PensieveSync?.matching(payload.url)) {
+  if ($('run-btn').disabled) return;
   const apiKey = getApiKey();
   if (!apiKey) {
     openDrawer();
@@ -1249,9 +1252,10 @@ async function run(kind, payload) {
     const result = await YTDistill.distill(
       source, meta, apiKey,
       (m) => logPush(m),
-      getContext(),
+      launch ? launch.perspective : getContext(),
+      { libraryPerspective: !!launch },
     );
-    finishRun({ videoId, url: meta.url || "", via, ...result });
+    finishRun({ videoId, url: meta.url || "", via, ...result, ...(launch ? {_pensieveLaunch:launch.id,perspective:launch.perspective} : {}) });
   } catch (e) {
     logPush("✗ 실패: " + e.message, "err");
   } finally {
@@ -1265,7 +1269,7 @@ function finishRun(data) {
   show(data);
   logPush("완료 · 보관함에 저장됨", "done");
   // 자동 갱신이 켜져 있으면 새 글을 포함해 프로필 재추론(수동 편집 관점은 보존). 본 흐름은 막지 않음.
-  if (getProfileAuto()) defineProfileNow(false);
+  if (!data._pensieveLaunch && getProfileAuto()) defineProfileNow(false);
 }
 // 상태 메시지는 다크 콘솔로 일원화한다(별도 상태창 제거).
 // 진행 중이 아니면(콘솔이 숨겨졌으면) 새로 띄워 단독 한 줄로 보여준다.
@@ -1427,4 +1431,8 @@ addEventListener('pensieve-archive-request', () => window.PensieveSync?.queue(ar
   window.PensieveSync?.queue(archive);
   renderList();
   updateStorageNote();
+  await window.PensieveSync?.boot(async launch => {
+    $('url').value=launch.url;
+    await run('url',{url:launch.url},launch);
+  }, launch => {const saved=archive.find(item=>item._pensieveLaunch===launch.id);if(saved){show(saved);return true;}return false;});
 })();

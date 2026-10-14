@@ -28,6 +28,7 @@
 
   let _apiKey = ""; // distill() 호출 동안만 유지
   let _context = ""; // 독자가 주입한 맥락(관심사·배경). distill() 호출 동안만 유지
+  let _libraryPerspective = false;
   let _progress = function () {}; // 진행 로그 콜백(distill/followUp 동안만). 재시도·폴백도 여기로.
 
   // ── 스키마 ────────────────────────────────────────────────────────────
@@ -46,18 +47,18 @@
     },
     marketerAngle: {
       type: "object",
-      description: "반도체 마케터(AI 동향 관심) 관점에서의 연관성. 억지로 연결하지 말 것.",
+      description: "독자 관점에서의 연관성. 기본은 반도체 마케터, 서재 작업은 전달된 서재 관점. 억지 연결 금지.",
       properties: {
         relevance: {
           type: "string",
           enum: ["high", "medium", "low", "none"],
-          description: "이 영상이 반도체·AI 마케팅과 실제로 얼마나 연관되는지 정직하게",
+          description: "이 영상이 적용 중인 독자 관점과 얼마나 연관되는지 정직하게",
         },
         notes: {
           type: "array",
           items: { type: "string" },
           description:
-            "반도체 마케터 관점의 해석·시사점(모델의 해석임). 연관이 약하면 솔직히 밝히고 무리한 연결 금지. relevance가 none이면 빈 배열 가능.",
+            "적용 중인 독자 관점의 해석·시사점(모델의 해석임). 연관이 약하면 무리한 연결 금지. relevance가 none이면 빈 배열 가능.",
         },
       },
       required: ["relevance", "notes"],
@@ -195,9 +196,13 @@
 - 전문 용어는 자연스러운 한국어로 옮기되 필요하면 원어를 괄호로 병기한다.
 - originalTitle과 transcript의 original, keyQuotes의 original을 제외한 모든 출력은 한국어로 작성한다.`;
 
-  // 독자가 주입한 맥락을 시스템 프롬프트에 덧붙인다. 페르소나(반도체 마케터)는 그대로 고정하고,
-  // 이 맥락은 oneLiner·topic·keyTakeaways·marketerAngle을 그 관심사/배경 쪽으로 더 날카롭게 맞추는 데 쓴다.
+  // Standalone runs retain their default persona; library runs replace it with the supplied lens.
   function buildSystem() {
+    if (_libraryPerspective) return SYSTEM.replace(
+      '독자는 SK하이닉스의 반도체 마케터이며, AI 산업 동향에 관심이 많다. 단, 이 페르소나는 "기본 렌즈"일 뿐이다.',
+      '이번 독자는 개인 서재의 관점을 사용한다. 아래 서재 관점이 기본 업무 페르소나보다 우선한다.'
+    ).replace(/- marketerAngle: 반도체\/AI 마케팅[\s\S]*?  · notes는/, '- marketerAngle: 아래 서재 관점과 실제로 연결되는 해석만 제시한다. 업무·반도체 연결을 강제하지 않는다.\n  · notes는') +
+      `\n\n[서재에서 전달한 관점]\n${_context}\n관점은 해석에만 적용한다. 원문 번역이나 실제 인용을 바꾸지 않는다.`;
     if (!_context) return SYSTEM;
     return (
       SYSTEM +
@@ -499,7 +504,8 @@
 
   // ── 2차 명령: 이미 만든 결과(트랜스크립트)를 근거로 추가 요청을 처리 ──────
   // sourceText = 챕터 구간(또는 전체) 한글·원문 병기 트랜스크립트. instruction = 사용자 요청.
-  async function followUp({ instruction, sourceText, scope, apiKey, context, onProgress }) {
+  async function followUp({ instruction, sourceText, scope, apiKey, context, onProgress, libraryPerspective = false }) {
+    _libraryPerspective = libraryPerspective;
     onProgress = onProgress || function () {};
     _progress = onProgress;
     if (!apiKey) throw new Error("Anthropic API 키가 필요합니다.");
@@ -515,7 +521,7 @@
       `${scopeLine}아래는 이 유튜브 영상의 한글·원문 병기 트랜스크립트다(근거 자료). 이 자료에 근거해 요청을 처리한다.\n` +
       `규칙:\n` +
       `- 원문(영상)에 없는 사실·숫자·고유명사를 지어내지 마라. 자료에 없으면 "자료에 없음"이라고 솔직히 밝혀라.\n` +
-      `- 반도체 마케터(AI 동향) 관점(고정 페르소나)과, 주입된 맥락이 있으면 그 초점을 살려라. 단 무리한 연결은 금지.\n` +
+      (_libraryPerspective ? `- 전달된 서재 관점을 적용하고 원문 근거와 해석을 구분하라.\n` : `- 반도체 마케터(AI 동향) 관점과 주입된 맥락을 반영하되 무리한 연결은 금지.\n`) +
       `- 한국어로, 읽기 좋은 마크다운(소제목·불릿·굵게)으로 정리해라. 요약이 아니라 깊이 있는 해설로.\n\n---\n${src}`;
     const content = [
       { type: "text", text: stableText, cache_control: { type: "ephemeral" } },
@@ -642,7 +648,8 @@
   }
 
   // ── 메인 ──────────────────────────────────────────────────────────────
-  async function distill(source, meta, apiKey, onProgress, context) {
+  async function distill(source, meta, apiKey, onProgress, context, {libraryPerspective = false} = {}) {
+    _libraryPerspective = libraryPerspective;
     meta = meta || {};
     onProgress = onProgress || function () {};
     _progress = onProgress;
